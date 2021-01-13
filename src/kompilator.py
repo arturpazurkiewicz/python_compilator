@@ -26,7 +26,7 @@ if __name__ == '__main__':
         parser = MyParser()
         # try:
         parse_ready = lexer.tokenize(code)
-        commands = parser.parse(parse_ready)
+        commands = parser.parse(parse_ready) + ["HALT"]
         # except Exception as e:
         #     print(e)
         print(commands)

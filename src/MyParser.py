@@ -1,7 +1,7 @@
 from sly import Parser
 
 from Logic import declare_variables, get_variable, get_table, load_variable_to_register, assign_value, \
-    concatenate_commands
+    concatenate_commands, start_of_write
 from MyLexer import MyLexer
 
 
@@ -18,7 +18,6 @@ class MyParser(Parser):
     @_('DECLARE declarations BEGIN commands END')
     def program(self, p):
         return p.commands[0]
-
 
     @_('BEGIN commands END')
     def program(self, p):
@@ -64,7 +63,7 @@ class MyParser(Parser):
     def command(self, p):
         a = p.identifier
         b = p.expression
-        return assign_value(a,b)
+        return assign_value(a, b)
 
     @_('IF condition THEN commands ELSE begin_else_if commands ENDIF')
     def command(self, p):
@@ -110,9 +109,17 @@ class MyParser(Parser):
     def command(self, p):
         print("read")
 
-    @_('WRITE value SEMICOLON')
+    @_('WRITE begin_write value SEMICOLON')
     def command(self, p):
+        global start_of_write
+        start_of_write = False
         print("write")
+
+
+    @_('')
+    def begin_write(self, p):
+        global start_of_write
+        start_of_write = True
 
     '''
     expression
@@ -145,13 +152,17 @@ class MyParser(Parser):
 
     @_('NUMBER')
     def value(self, p):
-        a = get_variable(p.NUMBER)
-        return load_variable_to_register(a)
+        if not start_of_write:
+            a = get_variable(p.NUMBER)
+            return load_variable_to_register(a)
+        return
 
     @_('identifier')
     def value(self, p):
-        a = load_variable_to_register(p.identifier)
-        return a
+        if not start_of_write:
+            a = load_variable_to_register(p.identifier)
+            return a
+        return
 
     '''
        identifier

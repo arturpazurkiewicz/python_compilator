@@ -1,7 +1,7 @@
 free_memory = 0
 declared_variables = {}
 registers = {}
-
+start_of_write = False
 from Models import *
 
 e_register = Register("e")
@@ -183,7 +183,7 @@ def assign_value(identifier, info):
     old_reg = info[0]
     old_string = info[1]
     old_lost = info[2]
-    lost_reg = []
+    lost_reg = info[2]
     if old_reg.variable is not None:
         lost_reg.append(LostRegister(old_reg, old_reg.variable))
         # usuwanie pozostałości z rejestru
@@ -214,4 +214,6 @@ def concatenate_commands(command1, command2):
     lost_regs = command1[1] + command2[1]
     return strings, lost_regs
 
-def
+
+# return Register,[string], [LostRegister]
+def load_memory_number_of_variable(variable):
