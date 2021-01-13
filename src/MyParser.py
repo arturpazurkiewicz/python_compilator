@@ -1,7 +1,7 @@
 from sly import Parser
 
 from Logic import declare_variables, get_variable, get_table, load_variable_to_register, assign_value, \
-    concatenate_commands, start_of_write
+    concatenate_commands
 from MyLexer import MyLexer
 
 
@@ -109,17 +109,10 @@ class MyParser(Parser):
     def command(self, p):
         print("read")
 
-    @_('WRITE begin_write value SEMICOLON')
+    @_('WRITE value SEMICOLON')
     def command(self, p):
-        global start_of_write
-        start_of_write = False
-        print("write")
+        return write_value(p.value)
 
-
-    @_('')
-    def begin_write(self, p):
-        global start_of_write
-        start_of_write = True
 
     '''
     expression
@@ -127,7 +120,7 @@ class MyParser(Parser):
 
     @_('value')
     def expression(self, p):
-        return p.value
+        return load_variable_to_register(p.value)
 
     @_('value ADD value',
        'value SUB value',
@@ -152,17 +145,11 @@ class MyParser(Parser):
 
     @_('NUMBER')
     def value(self, p):
-        if not start_of_write:
-            a = get_variable(p.NUMBER)
-            return load_variable_to_register(a)
-        return
+        return get_variable(p.NUMBER)
 
     @_('identifier')
     def value(self, p):
-        if not start_of_write:
-            a = load_variable_to_register(p.identifier)
-            return a
-        return
+        return p.identifier
 
     '''
        identifier

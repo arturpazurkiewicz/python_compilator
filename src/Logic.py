@@ -1,7 +1,6 @@
 free_memory = 0
 declared_variables = {}
 registers = {}
-start_of_write = False
 from Models import *
 
 e_register = Register("e")
@@ -35,9 +34,9 @@ def generate_memory_number(is_table, start=None, end=None):
 def initialize_registers():
     global registers
     registers["a"] = Register("a")
-    registers["b"] = Register("b")
-    registers["c"] = Register("c")
-    registers["d"] = Register("d")
+    # registers["b"] = Register("b")
+    # registers["c"] = Register("c")
+    # registers["d"] = Register("d")
     # registers["e"] = Register("e")
 
 
@@ -109,6 +108,7 @@ def generate_number(number, register):
 def save_register(register):
     string = []
     variable = register.variable
+    print(f"Saving {register.variable.name}")
     if variable.memory_address is not None:
         string += generate_number(variable.memory_address, f_register)
         string += [f"STORE {register.name} {f_register.name}"]
@@ -184,26 +184,28 @@ def assign_value(identifier, info):
     old_string = info[1]
     old_lost = info[2]
     lost_reg = info[2]
-    if old_reg.variable is not None:
+    if old_reg.type is RegisterType.is_to_save:
+        old_string += save_register(old_reg)
         lost_reg.append(LostRegister(old_reg, old_reg.variable))
+
         # usuwanie pozostałości z rejestru
-        for register in registers.values():
-            if register.variable is not None:
-                if register.variable.name == identifier.name:
-                    if isinstance(register.variable, TableValue):
-                        if register.variable.move.name == identifier.move.name:
-                            print(
-                                f"Czyszczenie rejestru {register.name} z pozostałości po {identifier.name} {identifier.move.name}")
-                            lost_reg.append(LostRegister(register, register.variable))
-                            register.type = RegisterType.is_unknown
-                            register.variable = None
-                            break
-                    else:
-                        print(f"Czyszczenie rejestru {register.name} z pozostałości po {identifier.name}")
+    for register in registers.values():
+        if register.variable is not None:
+            if register.variable.name == identifier.name:
+                if isinstance(register.variable, TableValue):
+                    if register.variable.move.name == identifier.move.name:
+                        print(
+                            f"Czyszczenie rejestru {register.name} z pozostałości po {identifier.name} {identifier.move.name}")
                         lost_reg.append(LostRegister(register, register.variable))
                         register.type = RegisterType.is_unknown
                         register.variable = None
                         break
+                else:
+                    print(f"Czyszczenie rejestru {register.name} z pozostałości po {identifier.name}")
+                    lost_reg.append(LostRegister(register, register.variable))
+                    register.type = RegisterType.is_unknown
+                    register.variable = None
+                    break
     old_reg.type = RegisterType.is_to_save
     old_reg.variable = identifier
     return old_string, lost_reg
@@ -216,4 +218,26 @@ def concatenate_commands(command1, command2):
 
 
 # return Register,[string], [LostRegister]
-def load_memory_number_of_variable(variable):
+def load_memory_address_of_variable(variable):
+    if variable.memory_address is not None:
+        for register in registers.values():
+            if isinstance(register, Number):
+                if register.value == variable.memory_address:
+                    return register, [], []
+        return f_register, generate_number(variable.memory_address, f_register), []
+    string = []
+    if isinstance(variable, TableValue):
+        for register in registers.values():
+            if register.variable is not None:
+                if register.variable.move.name == register.variable.name:
+                    string += reset_register(new_reg)
+                    string.append(f"ADD {new_reg.name} {register.name}")
+                    break
+        else:
+            string += load_normal_variable_to_register(variable.move, new_reg)
+    raise Exception("Unknown memory value!!!")
+
+
+# return Register,[string], [LostRegister]
+def write_value(variable):
+    return load_memory_address_of_variable(variable)
