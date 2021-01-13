@@ -1,7 +1,9 @@
 from sly import Parser
 
+from Logic import declare_variables, get_variable, get_table, load_variable_to_register, assign_value, \
+    concatenate_commands
 from MyLexer import MyLexer
-from Logic import *
+
 
 class MyParser(Parser):
     tokens = MyLexer.tokens
@@ -15,11 +17,12 @@ class MyParser(Parser):
 
     @_('DECLARE declarations BEGIN commands END')
     def program(self, p):
-        print("END")
+        return p.commands[0]
+
 
     @_('BEGIN commands END')
     def program(self, p):
-        print("END")
+        return p.commands[0]
 
     '''
     declarations
@@ -47,11 +50,11 @@ class MyParser(Parser):
 
     @_('commands command')
     def commands(self, p):
-        print("Commands")
+        return concatenate_commands(p.commands, p.command)
 
     @_('command')
     def commands(self, p):
-        print("Commands")
+        return p.command
 
     '''
     command
@@ -59,7 +62,9 @@ class MyParser(Parser):
 
     @_('identifier ASSIGN expression SEMICOLON')
     def command(self, p):
-        print("ASSIGN")
+        a = p.identifier
+        b = p.expression
+        return assign_value(a,b)
 
     @_('IF condition THEN commands ELSE begin_else_if commands ENDIF')
     def command(self, p):
@@ -115,7 +120,7 @@ class MyParser(Parser):
 
     @_('value')
     def expression(self, p):
-        print("expression value")
+        return p.value
 
     @_('value ADD value',
        'value SUB value',
@@ -140,11 +145,13 @@ class MyParser(Parser):
 
     @_('NUMBER')
     def value(self, p):
-        print("NUMBER")
+        a = get_variable(p.NUMBER)
+        return load_variable_to_register(a)
 
     @_('identifier')
     def value(self, p):
-        print("identifier")
+        a = load_variable_to_register(p.identifier)
+        return a
 
     '''
        identifier
@@ -152,15 +159,17 @@ class MyParser(Parser):
 
     @_('PIDENTIFIER')
     def identifier(self, p):
-        print("Pidentifier")
+        return get_variable(p.PIDENTIFIER)
 
     @_('PIDENTIFIER LBR PIDENTIFIER RBR')
     def identifier(self, p):
-        print("table by identifier")
+        a = get_table(p.PIDENTIFIER0, get_variable(p.PIDENTIFIER1))
+        return a
 
     @_('PIDENTIFIER LBR NUMBER RBR')
     def identifier(self, p):
-        print("table by number")
+        a = get_table(p.PIDENTIFIER, get_variable(p.NUMBER))
+        return a
 
     def error(self, token):
         raise Exception("Syntax error in grammar")

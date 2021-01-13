@@ -1,7 +1,7 @@
 import argparse
 from MyLexer import MyLexer
 from MyParser import MyParser
-from Logic import declared_variables, initialize_register
+from Logic import declared_variables, initialize_registers, registers, get_free_register, save_register
 
 
 def parse_arguments():
@@ -18,18 +18,17 @@ def parse_arguments():
 
 
 if __name__ == '__main__':
-    global declared_variables
     args = parse_arguments()
+    initialize_registers()
     with open(args.input_file, 'r') as input_file:
         code = input_file.read()
         lexer = MyLexer()
         parser = MyParser()
         # try:
         parse_ready = lexer.tokenize(code)
-        parser.parse(parse_ready)
+        commands = parser.parse(parse_ready)
         # except Exception as e:
         #     print(e)
-        commands = []
-
+        print(commands)
     with open(args.output_file, 'w') as output_file:
         output_file.write("\n".join(commands))
