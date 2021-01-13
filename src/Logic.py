@@ -34,9 +34,9 @@ def generate_memory_number(is_table, start=None, end=None):
 def initialize_registers():
     global registers
     registers["a"] = Register("a")
-    # registers["b"] = Register("b")
-    # registers["c"] = Register("c")
-    # registers["d"] = Register("d")
+    registers["b"] = Register("b")
+    registers["c"] = Register("c")
+    registers["d"] = Register("d")
     # registers["e"] = Register("e")
 
 
@@ -44,6 +44,8 @@ def initialize_registers():
 # return Variable/Number/Special
 def get_variable(pidentifier):
     if pidentifier in declared_variables:
+        if isinstance(declared_variables[pidentifier], Table):
+            raise Exception("No index parameter for table " + pidentifier)
         return declared_variables[pidentifier]
     else:
         if isinstance(pidentifier, int):
@@ -96,7 +98,8 @@ def generate_number(number, register):
             number = int(number / 2)
         if register.type is not RegisterType.is_restarted:
             string = [f"RESET {register.name}"] + string
-        register.type = RegisterType.is_unknown
+        else:
+            register.type = RegisterType.is_unknown
     else:
         if register.type is not RegisterType.is_restarted:
             string = [f"RESET {register.name}"] + string
@@ -108,13 +111,17 @@ def generate_number(number, register):
 def save_register(register):
     string = []
     variable = register.variable
-    print(f"Saving {register.variable.name}")
+    register.type = RegisterType.is_variable
     if variable.memory_address is not None:
+        print(f"Saving {register.variable.name} to {register.variable.memory_address}")
         string += generate_number(variable.memory_address, f_register)
         string += [f"STORE {register.name} {f_register.name}"]
         return string
     elif isinstance(variable, TableValue):
-        print("Ojojoj")
+        print(f"Saving {register.variable.name} {register.variable.move.name}")
+        reg, string, lost_register = get_table_address_of_variable(variable)
+        string.append(f"STORE {register.name} {reg.name}")
+        return string
 
 
 # return boolean
@@ -124,6 +131,29 @@ def are_variables_same(var1, var2):
             return are_variables_same(var1.move, var2.move)
         else:
             return True
+
+
+# return Register, [string], [LostRegister]
+def get_table_address_of_variable(variable):
+    if variable.memory_address is not None:
+        return f_register, generate_number(variable.memory_address, f_register), []
+    for register in registers.values():
+        if register.variable is not None and are_variables_same(register.variable,variable.move):
+            if are_variables_same(variable.move, register.variable):
+                move = register
+                string = []
+                lost_register = []
+                break
+    else:
+        string = load_normal_variable_to_register(variable.move, e_register)
+        move = e_register
+        lost_register = []
+    string += generate_number(variable.table.memory_address, f_register)
+    string.append(f"ADD {f_register.name} {move.name}")
+    if variable.table.start > 0:
+        string += generate_number(variable.table.start, e_register)
+        string.append(f"SUB {f_register.name} {e_register.name}")
+    return f_register, string, lost_register
 
 
 # return Register,[string],[LostRegister]
@@ -136,27 +166,17 @@ def load_variable_to_register(variable):
                         return register, [], []
                 else:
                     return register, [], []
-    string = []
 
-    result = get_free_register()
-    new_reg = result[0]
+    a, b, c = get_free_register()
+    a.variable = variable
+    a.type = RegisterType.is_variable
     if isinstance(variable, TableValue):
-        # a = generate_number(variable.memory_address, f_register)
-        for register in registers.values():
-            if register.variable is not None:
-                if register.variable.move.name == register.variable.name:
-                    string += reset_register(new_reg)
-                    string.append(f"ADD {new_reg.name} {register.name}")
-                    break
-        else:
-            string += load_normal_variable_to_register(variable.move, new_reg)
-        string += generate_number(variable.memory_address, f_register)
-        string.append(f"ADD {new_reg.name} {f_register.name}")
-        string.append(f"LOAD {new_reg.name} {f_register.name}")
-        # result[1] += string
-        return result[0], result[1] + string, result[2]
+        a1, b1, c1 = get_table_address_of_variable(variable)
+        b1.append(f"LOAD {a.name} {a1.name}")
+        return a+a1, b + b1, c + c1
     else:
-        return result[0], result[1] + load_normal_variable_to_register(variable, new_reg), result[2]
+
+        return a, b + load_normal_variable_to_register(variable, a), c
 
 
 # return [string]
@@ -164,7 +184,7 @@ def load_normal_variable_to_register(variable, register):
     string = []
     if variable.memory_address is not None:
         result = generate_number(variable.memory_address, f_register)
-        string.append(f"LOAD {register.name} {variable.memory_address}")
+        string.append(f"LOAD {register.name} {f_register.name}")
         return result + string
     else:
         return generate_number(variable.value, register)
@@ -175,6 +195,8 @@ def reset_register(register):
     if register.type is RegisterType.is_restarted:
         return []
     else:
+        register.value = None
+        register.type = RegisterType.is_restarted
         return [f"RESET {register.name}"]
 
 
@@ -182,8 +204,10 @@ def reset_register(register):
 def assign_value(identifier, info):
     old_reg = info[0]
     old_string = info[1]
-    old_lost = info[2]
     lost_reg = info[2]
+    if are_variables_same(identifier,old_reg.variable):
+        print(f"Same variables: {identifier.name}, skip")
+        return old_string,lost_reg
     if old_reg.type is RegisterType.is_to_save:
         old_string += save_register(old_reg)
         lost_reg.append(LostRegister(old_reg, old_reg.variable))
@@ -208,6 +232,7 @@ def assign_value(identifier, info):
                     break
     old_reg.type = RegisterType.is_to_save
     old_reg.variable = identifier
+    identifier.assigned = True
     return old_string, lost_reg
 
 
@@ -225,19 +250,41 @@ def load_memory_address_of_variable(variable):
                 if register.value == variable.memory_address:
                     return register, [], []
         return f_register, generate_number(variable.memory_address, f_register), []
-    string = []
     if isinstance(variable, TableValue):
-        for register in registers.values():
-            if register.variable is not None:
-                if register.variable.move.name == register.variable.name:
-                    string += reset_register(new_reg)
-                    string.append(f"ADD {new_reg.name} {register.name}")
-                    break
-        else:
-            string += load_normal_variable_to_register(variable.move, new_reg)
+        return get_table_address_of_variable(variable)
+
     raise Exception("Unknown memory value!!!")
 
 
-# return Register,[string], [LostRegister]
+# return [string], [LostRegister]
 def write_value(variable):
-    return load_memory_address_of_variable(variable)
+    check_is_assigned(variable)
+    string = []
+    lost_register = []
+    # check if is variable not saved
+    pom = None
+    for register in registers.values():
+        if register.variable is not None:
+            if variable.name == register.variable.name:
+                if isinstance(variable, TableValue):
+                    if variable.move.name == register.variable.move.name:
+                        pom = register
+                        break
+                else:
+                    pom = register
+                    break
+
+    if pom is not None and pom.type is RegisterType.is_to_save:
+        # lost_register.append(LostRegister(pom,pom.variable))
+        # string += reset_register(pom)
+        string += save_register(pom)
+        string.append(f"PUT {f_register.name}")
+        return string,[]
+    a, b, c = load_memory_address_of_variable(variable)
+    b.append(f"PUT {a.name}")
+    return string + b, lost_register + c
+
+
+def check_is_assigned(variable):
+    if not variable.assigned:
+        raise Exception(f"Value {variable.name} not assign before use")

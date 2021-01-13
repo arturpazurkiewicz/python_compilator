@@ -1,7 +1,7 @@
 from sly import Parser
 
 from Logic import declare_variables, get_variable, get_table, load_variable_to_register, assign_value, \
-    concatenate_commands
+    concatenate_commands, write_value
 from MyLexer import MyLexer
 
 
