@@ -49,7 +49,8 @@ class MyParser(Parser):
 
     @_('commands command')
     def commands(self, p):
-        return concatenate_commands(p.commands, p.command)
+        z = concatenate_commands(p.commands, p.command)
+        return z
 
     @_('command')
     def commands(self, p):
@@ -63,7 +64,8 @@ class MyParser(Parser):
     def command(self, p):
         a = p.identifier
         b = p.expression
-        return assign_value(a, b)
+        z = assign_value(a, b)
+        return z
 
     @_('IF condition THEN commands ELSE begin_else_if commands ENDIF')
     def command(self, p):
@@ -107,11 +109,13 @@ class MyParser(Parser):
 
     @_('READ identifier SEMICOLON')
     def command(self, p):
-        return read_variable(p.identifier)
+        z = read_variable(p.identifier)
+        return z
 
     @_('WRITE value SEMICOLON')
     def command(self, p):
-        return write_value(p.value)
+        z = write_value(p.value)
+        return z
 
     '''
     expression
@@ -119,7 +123,8 @@ class MyParser(Parser):
 
     @_('value')
     def expression(self, p):
-        return load_variable_to_register(p.value)
+        z = load_variable_to_register(p.value)
+        return z
 
     @_('blocked_register DIV value',
        'blocked_register MOD value')
@@ -129,7 +134,8 @@ class MyParser(Parser):
     @_('blocked_register ADD value')
     def expression(self, p):
         a = p.blocked_register
-        return add_variables(a, p.value)
+        z = add_variables(a, p.value)
+        return z
 
     @_('blocked_register SUB value')
     def expression(self, p):
@@ -139,7 +145,8 @@ class MyParser(Parser):
     @_('blocked_register MUL value')
     def expression(self, p):
         a = p.blocked_register
-        return mul_variables(a, p.value)
+        z = mul_variables(a, p.value)
+        return z
 
     @_('value')
     def blocked_register(self, p):

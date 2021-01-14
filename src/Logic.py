@@ -74,7 +74,7 @@ def get_free_register():
     # variable (no need to save)
     for reg in possible_registers:
         if reg.type is RegisterType.is_variable:
-            return reg, [reg], []
+            return reg, [], []
     # save variable
     for reg in possible_registers:
         if reg.type is RegisterType.is_to_save:
@@ -177,7 +177,7 @@ def load_variable_to_register(variable):
     if isinstance(variable, TableValue):
         a1, b1, c1 = get_table_address_of_variable(variable)
         b1.append(f"LOAD {a.name} {a1.name}")
-        return a + a1, b + b1, c + c1
+        return a, b + b1, c + c1
     else:
 
         return a, b + load_normal_variable_to_register(variable, a), c
@@ -363,6 +363,7 @@ def sub_variables(info1, variable2):
     reg1.is_blocked = False
     return reg1, string, lost_regs
 
+
 # TODO make optimizations
 def mul_variables(info1, variable2):
     r1 = info1[0]
@@ -411,5 +412,12 @@ def mul_variables(info1, variable2):
     r1.variable = None
     return r1, string, lost_regs
 
+
 def read_variable(variable):
-    pass
+    for register in registers.values():
+        if are_variables_same(register, variable):
+            register.variable = None
+            register.type = RegisterType.is_unknown
+    a, b, c = load_memory_address_of_variable(variable)
+    b.append(f"GET {a.name}")
+    return b, c
