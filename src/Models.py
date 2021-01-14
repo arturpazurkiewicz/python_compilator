@@ -8,8 +8,10 @@ class Variable:
         self.assigned = False
         self.name = name
         self.memory_address = memory_address
+
     def __str__(self):
         return f"Variable: {self.name}, memory: {self.memory_address}"
+
 
 class Number(Variable):
     def __init__(self, name, value, memory_address):
@@ -63,8 +65,10 @@ class Register:
         self.variable = None
         # move is used for Tables
         # self.move = None
+
     def __str__(self):
         return f"REGISTER: {self.name}, {self.variable}, type: {self.type}"
+
 
 class LostRegister:
     def __init__(self, register, variable):

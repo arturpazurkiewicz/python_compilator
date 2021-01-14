@@ -1,7 +1,7 @@
 from sly import Parser
 
 from Logic import declare_variables, get_variable, get_table, load_variable_to_register, assign_value, \
-    concatenate_commands, write_value
+    concatenate_commands, write_value, add_variables, sub_variables, mul_variables, read_variable
 from MyLexer import MyLexer
 
 
@@ -107,12 +107,11 @@ class MyParser(Parser):
 
     @_('READ identifier SEMICOLON')
     def command(self, p):
-        print("read")
+        return read_variable(p.identifier)
 
     @_('WRITE value SEMICOLON')
     def command(self, p):
         return write_value(p.value)
-
 
     '''
     expression
@@ -122,13 +121,31 @@ class MyParser(Parser):
     def expression(self, p):
         return load_variable_to_register(p.value)
 
-    @_('value ADD value',
-       'value SUB value',
-       'value MUL value',
-       'value DIV value',
-       'value MOD value')
+    @_('blocked_register DIV value',
+       'blocked_register MOD value')
     def expression(self, p):
         print("expression add etc..")
+
+    @_('blocked_register ADD value')
+    def expression(self, p):
+        a = p.blocked_register
+        return add_variables(a, p.value)
+
+    @_('blocked_register SUB value')
+    def expression(self, p):
+        a = p.blocked_register
+        return sub_variables(a, p.value)
+
+    @_('blocked_register MUL value')
+    def expression(self, p):
+        a = p.blocked_register
+        return mul_variables(a, p.value)
+
+    @_('value')
+    def blocked_register(self, p):
+        a = load_variable_to_register(p.value)
+        a[0].is_blocked = True
+        return a
 
     @_('value EQ value',
        'value NEQ value',

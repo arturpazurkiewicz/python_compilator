@@ -127,11 +127,14 @@ def save_register(register):
 
 # return boolean
 def are_variables_same(var1, var2):
-    if var1.name == var2.name:
-        if isinstance(var1, TableValue):
-            return are_variables_same(var1.move, var2.move)
-        else:
-            return True
+    try:
+        if var1.name == var2.name:
+            if isinstance(var1, TableValue):
+                return are_variables_same(var1.move, var2.move)
+            else:
+                return True
+    except:
+        return False
 
 
 # return Register, [string], [LostRegister]
@@ -303,12 +306,110 @@ def generate_additional_numbers():
     global additional_numbers
     try:
         memory = additional_numbers[0].memory_address
+        string = [f"RESET {f_register.name}"]
+        f_register.type = RegisterType.is_restarted
     except:
         return []
-    string = generate_number(memory, f_register)
+    string += generate_number(memory, f_register)
     for i in range(len(additional_numbers)):
         string += generate_number(additional_numbers[i].value, e_register)
         string.append(f"STORE {e_register.name} {f_register.name}")
         if i < len(additional_numbers) - 1:
             string.append(f"INC {f_register.name}")
     return string
+
+
+# return Register,[string], [LostRegister]
+def add_variables(info1, variable2):
+    reg1 = info1[0]
+    string = info1[1]
+    lost_regs = info1[2]
+    if reg1.type == RegisterType.is_to_save:
+        string += save_register(reg1)
+    if are_variables_same(info1[0].variable, variable2):
+        string.append(f"SHL {reg1.name}")
+    elif variable2.name == "1":
+        string.append(f"INC {reg1.name}")
+    elif variable2.name == "0":
+        pass
+    else:
+        a, b, c = load_variable_to_register(variable2)
+        string += b
+        lost_regs += c
+        string.append(f"ADD {reg1.name} {a.name}")
+    reg1.variable = None
+    reg1.is_blocked = False
+    return reg1, string, lost_regs
+
+
+def sub_variables(info1, variable2):
+    reg1 = info1[0]
+    string = info1[1]
+    lost_regs = info1[2]
+    if reg1.type == RegisterType.is_to_save:
+        string += save_register(reg1)
+    elif are_variables_same(info1[0].variable, variable2):
+        string.append(f"RESET {reg1.name}")
+    elif variable2.name == "1":
+        string.append(f"DEC {reg1.name}")
+    elif variable2.name == "0":
+        pass
+    else:
+        a, b, c = load_variable_to_register(variable2)
+        string += b
+        lost_regs += c
+        string.append(f"SUB {reg1.name} {a.name}")
+    reg1.variable = None
+    reg1.is_blocked = False
+    return reg1, string, lost_regs
+
+# TODO make optimizations
+def mul_variables(info1, variable2):
+    r1 = info1[0]
+    string = info1[1]
+    lost_regs = info1[2]
+    if r1.type == RegisterType.is_to_save:
+        string += save_register(r1)
+    if are_variables_same(info1[0].variable, variable2):
+        string.append(f"RESET {r1.name}")
+    elif variable2.name == "1" and variable2.name == "0":
+        string.append(f"RESET {r1.name}")
+    else:
+        r2, b, c = load_variable_to_register(variable2)
+        r2.is_blocked = True
+        result, b2, c3 = get_free_register()
+        string += b + b2
+        lost_regs += c + c3
+        string += [
+            f"RESET {result.name}",
+            f"ADD {result.name} {r2.name}",
+            f"SUB {result.name} {r1.name}",
+            f"JZERO {result.name} 10",
+            f"RESET {result.name}",
+            f"JODD {r1.name} 2",
+            f"JUMP 2",
+            f"ADD {result.name} {r2.name}",
+            f"SHL {r2.name}",
+            f"SHR {r1.name}",
+            f"JZERO {r1.name} 2",
+            f"JUMP -6",
+            f"JUMP 8",
+            f"JODD {r2.name} 2",
+            f"JUMP 2",
+            f"ADD {result.name} {r1.name}",
+            f"SHL {r1.name}",
+            f"SHR {r2.name}",
+            f"JZERO {r2.name} 2",
+            f"JUMP -6",
+        ]
+        r2.is_blocked = False
+        r1.is_blocked = False
+        r1.variable = None
+        r1.type = RegisterType.is_unknown
+        return result, string, lost_regs
+    r1.is_blocked = False
+    r1.variable = None
+    return r1, string, lost_regs
+
+def read_variable(variable):
+    pass
