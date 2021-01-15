@@ -71,6 +71,7 @@ class Register:
 
 
 class LostRegister:
-    def __init__(self, register, variable):
+    def __init__(self, register, variable,register_type):
         self.register = register
-        self.variable = variable,
+        self.variable = variable
+        self.register_type = register_type

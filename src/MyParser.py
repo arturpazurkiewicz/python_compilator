@@ -1,7 +1,8 @@
 from sly import Parser
 
 from Logic import declare_variables, get_variable, get_table, load_variable_to_register, assign_value, \
-    concatenate_commands, write_value, add_variables, sub_variables, mul_variables, read_variable
+    concatenate_commands, write_value, add_variables, sub_variables, mul_variables, read_variable, div_variables, \
+    mod_variables, copy_of_registers, condition_equal, load_registers
 from MyLexer import MyLexer
 
 
@@ -60,6 +61,16 @@ class MyParser(Parser):
     command
     '''
 
+    @_('')
+    def copy_of_registers(self, p):
+        print("Registers saved")
+        return copy_of_registers()
+
+    @_('')
+    def load_registers(self, p):
+        print("Registers loaded!")
+        return load_registers()
+
     @_('identifier ASSIGN expression SEMICOLON')
     def command(self, p):
         a = p.identifier
@@ -67,7 +78,7 @@ class MyParser(Parser):
         z = assign_value(a, b)
         return z
 
-    @_('IF condition THEN commands ELSE begin_else_if commands ENDIF')
+    @_('IF condition THEN copy_of_registers commands ELSE begin_else_if commands ENDIF')
     def command(self, p):
         print("END if")
 
@@ -75,9 +86,10 @@ class MyParser(Parser):
     def begin_else_if(self, p):
         print("if else")
 
-    @_('IF condition THEN commands ENDIF')
+    @_('IF condition THEN copy_of_registers commands ENDIF load_registers')
     def command(self, p):
-        print("END if")
+        var1, var2, condition = p.condition
+        return condition(var1,var2,concatenate_commands(p.commands,p.load_registers),([],[]))
 
     @_('WHILE begin_while condition DO commands ENDWHILE')
     def command(self, p):
@@ -126,16 +138,24 @@ class MyParser(Parser):
         z = load_variable_to_register(p.value)
         return z
 
-    @_('blocked_register DIV value',
-       'blocked_register MOD value')
+    @_('blocked_register MOD value')
     def expression(self, p):
-        print("expression add etc..")
+        a = p.blocked_register
+        z = mod_variables(a, p.value)
+        return z
 
     @_('blocked_register ADD value')
     def expression(self, p):
         a = p.blocked_register
         z = add_variables(a, p.value)
         return z
+
+    @_('blocked_register DIV value')
+    def expression(self, p):
+        a = p.blocked_register
+        z = div_variables(a, p.value)
+        return z
+
 
     @_('blocked_register SUB value')
     def expression(self, p):
@@ -154,14 +174,19 @@ class MyParser(Parser):
         a[0].is_blocked = True
         return a
 
-    @_('value EQ value',
-       'value NEQ value',
+    @_('value NEQ value',
        'value LWR value',
        'value GTR value',
        'value LEQ value',
        'value GEQ value')
     def condition(self, p):
         print("condition equal etc..")
+
+    # return variable1, viariable2, function
+    @_('value EQ value')
+    def condition(self, p):
+        a = condition_equal
+        return p.value0, p.value1, a
 
     '''
        value

@@ -31,6 +31,5 @@ if __name__ == '__main__':
         # except Exception as e:
         #     print(e)
         commands = generate_additional_numbers() + commands
-        print(commands)
     with open(args.output_file, 'w') as output_file:
         output_file.write("\n".join(commands))
