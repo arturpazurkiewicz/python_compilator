@@ -23,6 +23,10 @@ def declare_variables(pidentifier, start=None, end=None):
         declared_variables[pidentifier] = Table(pidentifier, start, end, generate_memory_number(True, start, end))
 
 
+def declare_for_variable(pidentifier):
+
+
+
 def generate_memory_number(is_table, start=None, end=None):
     global free_memory
     if is_table:
@@ -232,7 +236,8 @@ def reset_register(register):
 
 # return [string],[LostRegister]
 def assign_value(identifier, info):
-    print("jej")
+    if isinstance(identifier, ForVariable):
+        raise Exception(f"For variable {identifier.name} is being modified!!!")
     old_reg = info[0]
     old_string = info[1]
     lost_reg = info[2]
@@ -753,3 +758,12 @@ def prepare_condition_result(value0, value1, condition):
     reg2, s2, c2 = load_variable_to_register(value1)
     reg1.is_blocked = False
     return reg1, reg2, s1 + s2, condition
+
+
+def remove_copy_of_registers():
+    last_register_copy.pop()
+
+
+# return
+def create_for_pidentifier(pidentifier):
+    pass

@@ -3,7 +3,7 @@ from sly import Parser
 from Logic import declare_variables, get_variable, get_table, load_variable_to_register, assign_value, \
     concatenate_commands, write_value, add_variables, sub_variables, mul_variables, read_variable, div_variables, \
     mod_variables, copy_of_registers, condition_eq, load_registers, prepare_condition_result, condition_neq, \
-    condition_rgtr, condition_lgtr, condition_leq, condition_req
+    condition_rgtr, condition_lgtr, condition_leq, condition_req, remove_copy_of_registers, create_for_pidentifier
 from MyLexer import MyLexer
 
 
@@ -85,12 +85,14 @@ class MyParser(Parser):
         string ,z = condition(reg1, reg2,
                          concatenate_commands(p.commands0, p.load_registers0),
                          concatenate_commands(p.commands1, p.load_registers1))
+        remove_copy_of_registers()
         return cond_str + string, z
 
     @_('IF condition THEN copy_of_registers commands ENDIF load_registers')
     def command(self, p):
         reg1, reg2, cond_str, condition = p.condition
         string, z = condition(reg1, reg2, concatenate_commands(p.commands, p.load_registers), ([], []))
+        remove_copy_of_registers()
         return cond_str + string, z
 
     @_('WHILE begin_while condition DO commands ENDWHILE')
@@ -111,7 +113,9 @@ class MyParser(Parser):
 
     @_('')
     def begin_for_to(self, p):
-        print("begin for to")
+        return create_for_pidentifier(p[-6])
+
+
 
     @_('FOR PIDENTIFIER FROM value DOWNTO value DO begin_for_downto commands ENDFOR')
     def command(self, p):

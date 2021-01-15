@@ -50,6 +50,14 @@ class Special(Variable):
         self.assigned = True
 
 
+class ForVariable(Variable):
+    def __init__(self, name, value_from, value_to, memory_address):
+        super().__init__(name, memory_address)
+        self.value_from = value_from
+        self.value_to = value_to
+        self.assigned = True
+
+
 class RegisterType(enum.Enum):
     is_unknown = 'UNKNOWN'
     is_restarted = 'RESTARTED'
