@@ -4,7 +4,7 @@ from sly import Lexer
 class MyLexer(Lexer):
     tokens = {DECLARE, BEGIN, END, ASSIGN, IF, THEN, ELSE, ENDIF, WHILE, DO, ENDWHILE, REPEAT, UNTIL, FOR, FROM, TO,
               ENDFOR, DOWNTO, READ, WRITE, ADD, SUB, MUL, DIV, MOD, EQ, NEQ,
-              LWR, GTR, LEQ, GEQ,
+              LGTR, RGTR, LEQ, REQ,
               SEMICOLON, COLON, COMMA, LBR, RBR, PIDENTIFIER, NUMBER}
 
     DECLARE = r'DECLARE'
@@ -34,12 +34,12 @@ class MyLexer(Lexer):
     MUL = r'\*'
     DIV = r'\/'
     MOD = r'\%'
+    LEQ = r'<='
+    REQ = r'>='
     EQ = r'='
     NEQ = r'!='
-    LWR = r'<'
-    GTR = r'>'
-    LEQ = r'<='
-    GEQ = r'>='
+    LGTR = r'<'
+    RGTR = r'>'
     SEMICOLON = r';'
     COLON = r':'
     COMMA = r','

@@ -2,7 +2,8 @@ from sly import Parser
 
 from Logic import declare_variables, get_variable, get_table, load_variable_to_register, assign_value, \
     concatenate_commands, write_value, add_variables, sub_variables, mul_variables, read_variable, div_variables, \
-    mod_variables, copy_of_registers, condition_equal, load_registers
+    mod_variables, copy_of_registers, condition_eq, load_registers, prepare_condition_result, condition_neq, \
+    condition_rgtr, condition_lgtr, condition_leq, condition_req
 from MyLexer import MyLexer
 
 
@@ -78,18 +79,19 @@ class MyParser(Parser):
         z = assign_value(a, b)
         return z
 
-    @_('IF condition THEN copy_of_registers commands ELSE begin_else_if commands ENDIF')
+    @_('IF condition THEN copy_of_registers commands ELSE load_registers commands ENDIF load_registers')
     def command(self, p):
-        print("END if")
-
-    @_('')
-    def begin_else_if(self, p):
-        print("if else")
+        reg1, reg2, cond_str, condition = p.condition
+        string ,z = condition(reg1, reg2,
+                         concatenate_commands(p.commands0, p.load_registers0),
+                         concatenate_commands(p.commands1, p.load_registers1))
+        return cond_str + string, z
 
     @_('IF condition THEN copy_of_registers commands ENDIF load_registers')
     def command(self, p):
-        var1, var2, condition = p.condition
-        return condition(var1,var2,concatenate_commands(p.commands,p.load_registers),([],[]))
+        reg1, reg2, cond_str, condition = p.condition
+        string, z = condition(reg1, reg2, concatenate_commands(p.commands, p.load_registers), ([], []))
+        return cond_str + string, z
 
     @_('WHILE begin_while condition DO commands ENDWHILE')
     def command(self, p):
@@ -156,7 +158,6 @@ class MyParser(Parser):
         z = div_variables(a, p.value)
         return z
 
-
     @_('blocked_register SUB value')
     def expression(self, p):
         a = p.blocked_register
@@ -174,19 +175,30 @@ class MyParser(Parser):
         a[0].is_blocked = True
         return a
 
-    @_('value NEQ value',
-       'value LWR value',
-       'value GTR value',
-       'value LEQ value',
-       'value GEQ value')
+    @_('value LGTR value',)
     def condition(self, p):
-        print("condition equal etc..")
+        return prepare_condition_result(p.value0, p.value1, condition_lgtr)
+
+    @_('value RGTR value', )
+    def condition(self, p):
+        return prepare_condition_result(p.value0, p.value1, condition_rgtr)
+
+    @_('value LEQ value', )
+    def condition(self, p):
+        return prepare_condition_result(p.value0, p.value1, condition_leq)
+
+    @_('value REQ value', )
+    def condition(self, p):
+        return prepare_condition_result(p.value0, p.value1, condition_req)
 
     # return variable1, viariable2, function
     @_('value EQ value')
     def condition(self, p):
-        a = condition_equal
-        return p.value0, p.value1, a
+        return prepare_condition_result(p.value0, p.value1, condition_eq)
+
+    @_('value NEQ value')
+    def condition(self, p):
+        return prepare_condition_result(p.value0, p.value1, condition_neq)
 
     '''
        value

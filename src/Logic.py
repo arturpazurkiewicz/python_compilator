@@ -166,13 +166,8 @@ def get_table_address_of_variable(variable):
 # return Register,[string],[LostRegister]
 def load_variable_to_register(variable):
     for register in registers.values():
-        if register.variable is not None:
-            if variable.name == register.variable.name:
-                if isinstance(variable, TableValue):
-                    if variable.move.name == register.variable.move.name:
-                        return register, [], []
-                else:
-                    return register, [], []
+        if are_variables_same(variable, register.variable):
+            return register, [], []
 
     a, b, c = get_free_register()
     b1, c1 = load_variable_to_specific_register(variable, a)
@@ -237,6 +232,7 @@ def reset_register(register):
 
 # return [string],[LostRegister]
 def assign_value(identifier, info):
+    print("jej")
     old_reg = info[0]
     old_string = info[1]
     lost_reg = info[2]
@@ -400,6 +396,8 @@ def mul_variables(info1, variable2):
     r1 = info1[0]
     string = info1[1]
     lost_regs = info1[2]
+    check_is_assigned(r1.variable)
+
     if r1.type == RegisterType.is_to_save:
         string += save_register(r1)
     if variable2.name == "0" or variable2.name == "0":
@@ -408,9 +406,15 @@ def mul_variables(info1, variable2):
         string += generate_number(int(r1.value * variable2.value), r1)
     else:
         r2, b, c = load_variable_to_register(variable2)
+
+        if r1 == r2:
+            print("Warning, same registers!!!")
+            r2, b, c = get_free_register()
         r2.is_blocked = True
         result, b2, c3 = get_free_register()
         string += b + b2
+        if r2.type == RegisterType.is_to_save:
+            string += save_register(r2)
         lost_regs += c + c3
         string += [
             f"RESET {result.name}",
@@ -438,6 +442,9 @@ def mul_variables(info1, variable2):
         r1.is_blocked = False
         r1.variable = None
         r1.type = RegisterType.is_unknown
+        r2.type = RegisterType.is_unknown
+        r2.variable = None
+        print(f"Mnożenie {r1}\n{r2}\n{result}")
         return result, string, lost_regs
     r1.is_blocked = False
     r1.variable = None
@@ -558,6 +565,8 @@ def mod_variables(info1, variable2):
         r1.is_blocked = False
         r1.variable = None
         r1.type = RegisterType.is_unknown
+        r2.variable = None
+        r2.type = RegisterType.is_unknown
         return result, string, lost_regs
     r1.is_blocked = False
     r1.variable = None
@@ -571,6 +580,7 @@ def read_variable(variable):
             register.type = RegisterType.is_unknown
     a, b, c = load_memory_address_of_variable(variable)
     b.append(f"GET {a.name}")
+    variable.assigned = True
     return b, c
 
 
@@ -600,6 +610,8 @@ def load_registers():
                 if real_reg.type == RegisterType.is_to_save:
                     string += save_register(real_reg)
             else:
+                if real_reg.type == RegisterType.is_to_save:
+                    string += save_register(real_reg)
                 z = load_variable_to_specific_register(was_variable, real_reg)
                 string += z[0]
                 lostRegs += z[1]
@@ -633,22 +645,24 @@ def load_registers():
 
 
 # return [string],[LostRegs]
-def condition_equal(variable1, variable2, commands_true, commands_false, normal_build=True):
-    if isinstance(variable1, Number) and isinstance(variable2, Number):
-        if variable1.value == variable2.value:
+def condition_eq(reg1, reg2, commands_true, commands_false, normal_build=True):
+    if isinstance(reg2.variable, Number) and isinstance(reg1.variable, Number):
+        if reg1.variable.value == reg2.variable.value:
             return commands_true
         else:
             return commands_false
     else:
-        reg1, s1, c1 = load_variable_to_register(variable1)
+        string = []
         if reg1.type == RegisterType.is_to_save:
-            s1 += save_register(reg1)
-        reg2, s2, c2 = load_variable_to_register(variable2)
-        string = s1 + s2
+            string += save_register(reg1)
+        string_true = commands_true[0]
+        string_false = commands_false[0]
         if normal_build:
+            if len(string_false) != 0:
+                string_true.append(f"JUMP {len(string_false) + 1}")
             move_true = 2
-            move_false1 = 3 + len(commands_true)
-            move_false2 = len(commands_true)
+            move_false1 = 4 + len(string_true)
+            move_false2 = len(string_true) + 1
 
         string += [
             f"INC {reg1.name}",
@@ -660,4 +674,82 @@ def condition_equal(variable1, variable2, commands_true, commands_false, normal_
         ]
         reg1.variable = None
         reg1.type = RegisterType.is_unknown
-        return None
+        return string + string_true + string_false, []
+
+
+# return [string],[LostRegs]
+def condition_neq(reg1, reg2, commands_true, commands_false, normal_build=True):
+    return condition_eq(reg1, reg2, commands_false, commands_true, normal_build)
+    # if isinstance(reg2.variable, Number) and isinstance(reg1.variable, Number):
+    #     if reg1.variable.value == reg2.variable.value:
+    #         return commands_false
+    #     else:
+    #         return commands_true
+    # else:
+    #     string = []
+    #     if reg1.type == RegisterType.is_to_save:
+    #         string += save_register(reg1)
+    #     string_true = commands_true[0]
+    #     string_false = commands_false[0]
+    #     if normal_build:
+    #         if len(string_false) != 0:
+    #             string_true.append(f"JUMP {len(string_false) + 1}")
+    #         move_false = 1 + len(string_true)
+    #         move_true0 = 3
+    #
+    #     string += [
+    #         f"INC {reg1.name}",
+    #         f"SUB {reg1.name} {reg2.name}",
+    #         f"JZERO {reg1.name} {move_true0}",
+    #         f"DEC {reg1.name}",
+    #         f"JZERO {reg1.name} {move_false}",
+    #     ]
+    #     reg1.variable = None
+    #     reg1.type = RegisterType.is_unknown
+    #     return string + string_true + string_false, []
+
+
+def condition_rgtr(reg1, reg2, commands_true, commands_false, normal_build=True):
+    if isinstance(reg2.variable, Number) and isinstance(reg1.variable, Number):
+        if reg1.variable.value > reg2.variable.value:
+            return commands_true
+        else:
+            return commands_false
+    else:
+        string = []
+        if reg1.type == RegisterType.is_to_save:
+            string += save_register(reg1)
+        string_true = commands_true[0]
+        string_false = commands_false[0]
+        if normal_build:
+            if len(string_false) != 0:
+                string_true.append(f"JUMP {len(string_false) + 1}")
+            move_false1 = 1 + len(string_true)
+
+        string += [
+            f"SUB {reg1.name} {reg2.name}",
+            f"JZERO {reg1.name} {move_false1}",
+        ]
+        reg1.variable = None
+        reg1.type = RegisterType.is_unknown
+        return string + string_true + string_false, []
+
+
+def condition_lgtr(reg1, reg2, commands_true, commands_false, normal_build=True):
+    return condition_rgtr(reg2, reg1, commands_true, commands_false, normal_build)
+
+
+def condition_leq(reg1, reg2, commands_true, commands_false, normal_build=True):
+    return condition_rgtr(reg1, reg2, commands_false, commands_true, normal_build)
+
+
+def condition_req(reg1, reg2, commands_true, commands_false, normal_build=True):
+    return condition_rgtr(reg2, reg1, commands_false, commands_true, normal_build)
+
+
+def prepare_condition_result(value0, value1, condition):
+    reg1, s1, c1 = load_variable_to_register(value0)
+    reg1.is_blocked = True
+    reg2, s2, c2 = load_variable_to_register(value1)
+    reg1.is_blocked = False
+    return reg1, reg2, s1 + s2, condition
