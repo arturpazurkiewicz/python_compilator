@@ -79,7 +79,13 @@ class Register:
 
 
 class LostRegister:
-    def __init__(self, register, variable,register_type):
+    def __init__(self, register, variable, register_type):
         self.register = register
         self.variable = variable
         self.register_type = register_type
+
+
+class ConditionMode(enum.Enum):
+    is_if = 'IF'
+    is_while = 'WHILE'
+    is_repeat = 'REPEAT'

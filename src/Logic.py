@@ -412,9 +412,9 @@ def sub_variables(info1, variable2):
 
     if are_variables_same(info1[0].variable, variable2):
         string.append(f"RESET {reg1.name}")
-    elif variable2.name == "1":
+    elif variable2.name == 1:
         string.append(f"DEC {reg1.name}")
-    elif variable2.name == "0":
+    elif variable2.name == 0:
         pass
     else:
         a, b = load_variable_to_register(variable2)
@@ -433,7 +433,7 @@ def mul_variables(info1, variable2):
 
     if r1.type == RegisterType.is_to_save:
         string += save_register(r1)
-    if variable2.name == "0" or variable2.name == "0":
+    if variable2.name == 0 or variable2.name == 0:
         string.append(f"RESET {r1.name}")
     elif isinstance(r1, Number) and isinstance(variable2, Number):
         string += generate_number(int(r1.value * variable2.value), r1)
@@ -542,7 +542,7 @@ def mod_variables(info1, variable2):
     string = info1[1]
     if r1.type == RegisterType.is_to_save:
         string += save_register(r1)
-    if variable2.name == "0" or variable2.name == "0":
+    if variable2.name == 0 or variable2.name == 0:
         string.append(f"RESET {r1.name}")
     elif are_variables_same(r1.variable, variable2):
         string.append(f"RESET {r1.name}")
@@ -671,106 +671,216 @@ def load_registers():
 
 
 # return [string],[LostRegs]
-def condition_eq(reg1, reg2, commands_true, commands_false, normal_build=True):
-    if isinstance(reg2.variable, Number) and isinstance(reg1.variable, Number):
-        if reg1.variable.value == reg2.variable.value:
-            return commands_true
+def condition_eq(reg1, reg2, var1, var2, commands_true, commands_false, mode=ConditionMode.is_if):
+    if mode == ConditionMode.is_if:
+        if isinstance(reg2.variable, Number) and isinstance(reg1.variable, Number):
+            if reg1.variable.value == reg2.variable.value:
+                return commands_true
+            else:
+                return commands_false
         else:
-            return commands_false
-    else:
-        string = []
-        if reg1.type == RegisterType.is_to_save:
-            string += save_register(reg1)
-        string_true = commands_true[0]
-        string_false = commands_false[0]
-        if normal_build:
+            string = []
+            if reg1.type == RegisterType.is_to_save:
+                string += save_register(reg1)
+            string_true = commands_true
+            string_false = commands_false
+
             if len(string_false) != 0:
                 string_true.append(f"JUMP {len(string_false) + 1}")
-            move_true = 2
-            move_false1 = 4 + len(string_true)
-            move_false2 = len(string_true) + 1
-
-        string += [
-            f"INC {reg1.name}",
-            f"SUB {reg1.name} {reg2.name}",
-            f"JZERO {reg1.name} {move_false1}",
-            f"DEC {reg1.name}",
-            f"JZERO {reg1.name} {move_true}",
-            f"JUMP {move_false2}"
+            string += [
+                f"ADD {e_register.name} {reg1.name}"
+                f"INC {e_register.name}",
+                f"SUB {e_register.name} {reg2.name}",
+                f"JZERO {e_register.name} {4 + len(string_true)}",
+                f"DEC {e_register.name}",
+                f"JZERO {e_register.name} {2}",
+                f"JUMP {len(string_true) + 1}"
+            ]
+            return string + string_true + string_false
+    elif mode == ConditionMode.is_while:
+        if isinstance(reg2.variable, Number) and isinstance(reg1.variable, Number):
+            if reg1.variable.value == reg2.variable.value:
+                print("Warning, infinity loop!!!")
+            else:
+                return commands_false
+        string = []
+        # if reg1.type == RegisterType.is_to_save:
+        #     string += save_register(reg1)
+        commands_true += reset_register(e_register)
+        e_register.type = RegisterType.is_unknown
+        string = [
+            f"ADD {e_register.name} {reg1.name}"
+            f"INC {e_register.name}",
+            f"SUB {e_register.name} {reg2.name}",
+            f"JZERO {e_register.name} {5 + len(commands_true)}",
+            f"DEC {e_register.name}",
+            f"JZERO {e_register.name} {2}",
+            f"JUMP {len(commands_true) + 1}"
         ]
-        reg1.variable = None
-        reg1.type = RegisterType.is_unknown
-        return string + string_true + string_false
+        commands_true.append(f"JUMP {-6 - len(commands_true)}")
+        return string + commands_true
+    elif mode == ConditionMode.is_repeat:
+        loader = load_registers()
+        if len(loader) > 0:
+            loader = [f"JUMP {1 + len(loader)}"] + loader
+        if variable_was_in_copy(reg1):
+            commands = [
+                f"ADD {e_register.name} {reg1.name}"
+                f"INC {e_register.name}",
+                f"SUB {e_register.name} {reg2.name}",
+                f"JZERO {e_register.name} {-3 - len(commands_true) - len(loader)}",
+                f"DEC {e_register.name}",
+                f"JZERO {e_register.name} {2}",
+                f"JUMP {- len(commands_true) - 6 - len(loader)}"
+            ]
+        else:
+            commands = [
+                f"INC {reg1.name}",
+                f"SUB {reg1.name} {reg2.name}",
+                f"JZERO {reg1.name} {-2 - len(commands_true) - len(loader)}",
+                f"DEC {reg1.name}",
+                f"JZERO {reg1.name} {2}",
+                f"JUMP {- len(commands_true) - 5 - len(loader)}"
+            ]
+            reg1.variable = None
+            reg1.type = RegisterType.is_unknown
+        return loader + commands_true + commands
 
 
 # return [string],[LostRegs]
-def condition_neq(reg1, reg2, commands_true, commands_false, normal_build=True):
-    return condition_eq(reg1, reg2, commands_false, commands_true, normal_build)
-    # if isinstance(reg2.variable, Number) and isinstance(reg1.variable, Number):
-    #     if reg1.variable.value == reg2.variable.value:
-    #         return commands_false
-    #     else:
-    #         return commands_true
-    # else:
-    #     string = []
-    #     if reg1.type == RegisterType.is_to_save:
-    #         string += save_register(reg1)
-    #     string_true = commands_true[0]
-    #     string_false = commands_false[0]
-    #     if normal_build:
-    #         if len(string_false) != 0:
-    #             string_true.append(f"JUMP {len(string_false) + 1}")
-    #         move_false = 1 + len(string_true)
-    #         move_true0 = 3
-    #
-    #     string += [
-    #         f"INC {reg1.name}",
-    #         f"SUB {reg1.name} {reg2.name}",
-    #         f"JZERO {reg1.name} {move_true0}",
-    #         f"DEC {reg1.name}",
-    #         f"JZERO {reg1.name} {move_false}",
-    #     ]
-    #     reg1.variable = None
-    #     reg1.type = RegisterType.is_unknown
-    #     return string + string_true + string_false, []
+def condition_neq(reg1, reg2, var1, var2, commands_true, commands_false, mode=ConditionMode.is_if):
+    if mode == ConditionMode.is_if:
+        return condition_eq(reg1, reg2, var1, var2, commands_false, commands_true, mode)
+    elif mode == ConditionMode.is_while:
+        if isinstance(reg2.variable, Number) and isinstance(reg1.variable, Number):
+            if reg1.variable.value != reg2.variable.value:
+                print("Warning, infinity loop!!!")
+            else:
+                return commands_false
 
-
-def condition_rgtr(reg1, reg2, commands_true, commands_false, normal_build=True):
-    if isinstance(reg2.variable, Number) and isinstance(reg1.variable, Number):
-        if reg1.variable.value > reg2.variable.value:
-            return commands_true
-        else:
-            return commands_false
-    else:
         string = []
-        if reg1.type == RegisterType.is_to_save:
-            string += save_register(reg1)
-        string_true = commands_true
-        string_false = commands_false
-        if normal_build:
+        # if reg1.type == RegisterType.is_to_save:
+        #     string += save_register(reg1)
+        commands_true += reset_register(e_register)
+        e_register.type = RegisterType.is_unknown
+
+        string += [
+            f"ADD {e_register.name} {reg1.name}",
+            f"INC {e_register.name}",
+            f"SUB {e_register.name} {reg2.name}",
+            f"JZERO {e_register.name} {3}",
+            f"DEC {e_register.name}",
+            f"JZERO {e_register.name} {2 + len(commands_true)}"
+        ]
+
+        commands_true.append(f"JUMP {-6 - len(commands_true)}")
+        return string + commands_true
+
+
+def condition_lgtr(reg1, reg2, var1, var2, commands_true, commands_false, mode=ConditionMode.is_if):
+    if mode == ConditionMode.is_if:
+        if isinstance(var1, Number) and isinstance(var2, Number):
+            if var1.value > var2.value:
+                return commands_true
+            else:
+                return commands_false
+        else:
+            string = []
+            # if reg1.type == RegisterType.is_to_save:
+            #     string += save_register(reg1)
+            string_true = commands_true
+            string_false = commands_false
+
             if len(string_false) != 0:
                 string_true.append(f"JUMP {len(string_false) + 1}")
             move_false1 = 1 + len(string_true)
 
+            string += [
+                f"ADD {e_register.name} {reg1.name}"
+                f"SUB {e_register.name} {reg2.name}",
+                f"JZERO {e_register.name} {move_false1}",
+            ]
+        return string + string_true + string_false
+    elif mode == ConditionMode.is_while:
+        if isinstance(reg2.variable, Number) and isinstance(reg1.variable, Number):
+            if reg1.variable.value > reg2.variable.value:
+                print("Warning, infinity loop!!!")
+            else:
+                return commands_false
+        string = []
+        # if reg1.type == RegisterType.is_to_save:
+        #     string += save_register(reg1)
+        commands_true += reset_register(e_register)
+        e_register.type = RegisterType.is_unknown
+        move_false1 = 2 + len(commands_true)
+
         string += [
-            f"SUB {reg1.name} {reg2.name}",
-            f"JZERO {reg1.name} {move_false1}",
+            f"ADD {e_register.name} {reg1.name}",
+            f"SUB {e_register.name} {reg2.name}",
+            f"JZERO {e_register.name} {move_false1}",
         ]
+
+        commands_true.append(f"JUMP {-3 - len(commands_true)}")
+        return string + commands_true
+
+
+def condition_rgtr(reg1, reg2, var1, var2, commands_true, commands_false, mode=ConditionMode.is_if):
+    return condition_lgtr(reg2, reg1, var2, var1, commands_true, commands_false, mode)
+
+
+def condition_req(reg1, reg2, var1, var2, commands_true, commands_false, mode=ConditionMode.is_if):
+    return condition_leq(reg2, reg1, var2, var1, commands_true, commands_false, mode)
+
+
+def condition_leq(reg1, reg2, var1, var2, commands_true, commands_false, mode=ConditionMode.is_if):
+    if mode == ConditionMode.is_if:
+        if isinstance(var1, Number) and isinstance(var2, Number):
+            if var1.value >= var2.value:
+                return commands_true
+            else:
+                return commands_false
+        else:
+            string = []
+            # if reg1.type == RegisterType.is_to_save:
+            #     string += save_register(reg1)
+            string_true = commands_true
+            string_false = commands_false
+
+            if len(string_false) != 0:
+                string_true.append(f"JUMP {len(string_false) + 1}")
+            move_false1 = 1 + len(string_true)
+
+            string += [
+                f"ADD {e_register.name} {reg2.name}"
+                f"SUB {e_register.name} {reg1.name}",
+                f"JZERO {e_register.name} 2",
+                f"JUMP {move_false1}"
+            ]
+        return string + string_true + string_false
+    elif mode == ConditionMode.is_while:
+        if isinstance(reg2.variable, Number) and isinstance(reg1.variable, Number):
+            if reg1.variable.value > reg2.variable.value:
+                print("Warning, infinity loop!!!")
+            else:
+                return commands_false
+        string = []
+        # if reg1.type == RegisterType.is_to_save:
+        #     string += save_register(reg1)
+        commands_true += reset_register(e_register)
+        e_register.type = RegisterType.is_unknown
+        move_false1 = 2 + len(commands_true)
+
+        string += [
+            f"ADD {e_register.name} {reg2.name}"
+            f"SUB {e_register.name} {reg1.name}",
+            f"JZERO {e_register.name} 2",
+            f"JUMP {move_false1}"
+        ]
+
+        commands_true.append(f"JUMP {-4 - len(commands_true)}")
         reg1.variable = None
         reg1.type = RegisterType.is_unknown
-        return string + string_true + string_false
-
-
-def condition_lgtr(reg1, reg2, commands_true, commands_false, normal_build=True):
-    return condition_rgtr(reg2, reg1, commands_true, commands_false, normal_build)
-
-
-def condition_leq(reg1, reg2, commands_true, commands_false, normal_build=True):
-    return condition_rgtr(reg1, reg2, commands_false, commands_true, normal_build)
-
-
-def condition_req(reg1, reg2, commands_true, commands_false, normal_build=True):
-    return condition_rgtr(reg2, reg1, commands_false, commands_true, normal_build)
+        return string + commands_true
 
 
 def prepare_condition_result(value0, value1, condition):
@@ -778,7 +888,24 @@ def prepare_condition_result(value0, value1, condition):
     reg1.is_blocked = True
     reg2, s2 = load_variable_to_register(value1)
     reg1.is_blocked = False
-    return reg1, reg2, s1 + s2, condition
+    var1 = reg1.variable
+    var2 = reg2.variable
+    string = reset_register(e_register)
+    e_register.type = RegisterType.is_unknown
+
+    # if condition is condition_req or condition is condition_eq or condition is condition_neq or condition is condition_lgtr:
+    #     if reg1.type == RegisterType.is_to_save:
+    #         string = save_register(reg1)
+    #     reg1.type = RegisterType.is_unknown
+    #     reg1.variable = None
+    #
+    # else:
+    #     if reg2.type == RegisterType.is_to_save:
+    #         string = save_register(reg2)
+    #     reg2.type = RegisterType.is_unknown
+    #     reg2.variable = None
+
+    return reg1, reg2, var1, var2, s1 + s2 + string, condition
 
 
 def remove_copy_of_registers():
@@ -934,3 +1061,14 @@ def remove_for_variable_from_register(variable):
             register.variable = None
             register.type = RegisterType.is_unknown
     print("Register restarted")
+
+
+def variable_was_in_copy(register):
+    x = last_register_copy.pop()
+    last_register_copy.append(x)
+    for c in x[0] + [x[1], x[2]]:
+        if c.register == register:
+            if are_variables_same(c.variable, register.variable):
+                return True
+
+    return False

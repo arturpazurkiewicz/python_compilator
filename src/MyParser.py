@@ -3,8 +3,8 @@ from sly import Parser
 from Logic import declare_variables, get_variable, get_table, load_variable_to_register, assign_value, \
     concatenate_commands, write_value, add_variables, sub_variables, mul_variables, read_variable, div_variables, \
     mod_variables, copy_of_registers, condition_eq, load_registers, prepare_condition_result, condition_neq, \
-    condition_rgtr, condition_lgtr, condition_leq, condition_req, remove_copy_of_registers, begin_for, \
-    create_for_to, create_for_downto
+    condition_lgtr, condition_rgtr, condition_req, condition_leq, remove_copy_of_registers, begin_for, \
+    create_for_to, create_for_downto, ConditionMode
 from MyLexer import MyLexer
 
 
@@ -82,33 +82,40 @@ class MyParser(Parser):
 
     @_('IF condition THEN copy_of_registers commands ELSE load_registers commands ENDIF load_registers')
     def command(self, p):
-        reg1, reg2, cond_str, condition = p.condition
-        string ,z = condition(reg1, reg2,
-                         concatenate_commands(p.commands0, p.load_registers0),
-                         concatenate_commands(p.commands1, p.load_registers1))
-        remove_copy_of_registers()
-        return cond_str + string, z
-
-    @_('IF condition THEN copy_of_registers commands ENDIF load_registers')
-    def command(self, p):
-        reg1, reg2, cond_str, condition = p.condition
-        string = condition(reg1, reg2, concatenate_commands(p.commands, p.load_registers), [])
+        reg1, reg2, var1, var2, cond_str, condition = p.condition
+        string = condition(reg1, reg2, var1, var2,
+                           concatenate_commands(p.commands0, p.load_registers0),
+                           concatenate_commands(p.commands1, p.load_registers1), mode=ConditionMode.is_if)
         remove_copy_of_registers()
         return cond_str + string
 
-    @_('WHILE begin_while condition DO commands ENDWHILE')
+    @_('IF condition THEN copy_of_registers commands ENDIF load_registers')
     def command(self, p):
-        print("end while")
+        reg1, reg2, var1, var2, cond_str, condition = p.condition
+        string = condition(reg1, reg2, var1, var2, concatenate_commands(p.commands, p.load_registers), [],
+                           mode=ConditionMode.is_if)
+        remove_copy_of_registers()
+        return cond_str + string
 
-    @_('REPEAT begin_while commands UNTIL condition SEMICOLON')
+    @_('WHILE condition DO copy_of_registers commands ENDWHILE load_registers')
     def command(self, p):
-        print("end repeat")
+        reg1, reg2, var1, var2, cond_str, condition = p.condition
+        string = condition(reg1, reg2, var1, var2, concatenate_commands(p.commands, p.load_registers, ), [],
+                           mode=ConditionMode.is_while)
+        remove_copy_of_registers()
+        return cond_str + string
 
-    @_('')
-    def begin_while(self, p):
-        print("while")
+    # load_registers inside method!!!
+    @_('REPEAT copy_of_registers commands UNTIL condition SEMICOLON')
+    def command(self, p):
+        reg1, reg2, var1, var2, cond_str, condition = p.condition
+        string = condition(reg1, reg2, var1, var2, p.commands, [],
+                           mode=ConditionMode.is_repeat)
+        remove_copy_of_registers()
+        return cond_str + string
 
-    @_('FOR PIDENTIFIER  FROM value TO value DO copy_of_registers begin_for copy_of_registers commands ENDFOR load_registers')
+    @_(
+        'FOR PIDENTIFIER  FROM value TO value DO copy_of_registers begin_for copy_of_registers commands ENDFOR load_registers')
     def command(self, p):
         return create_for_to(p.begin_for, concatenate_commands(p.commands, p.load_registers))
 
@@ -116,13 +123,10 @@ class MyParser(Parser):
     def begin_for(self, p):
         return begin_for(p[-7], p[-5], p[-3])
 
-
-
-    @_('FOR PIDENTIFIER  FROM value DOWNTO value DO copy_of_registers begin_for copy_of_registers commands ENDFOR load_registers')
+    @_(
+        'FOR PIDENTIFIER  FROM value DOWNTO value DO copy_of_registers begin_for copy_of_registers commands ENDFOR load_registers')
     def command(self, p):
-        return create_for_downto(p.begin_for,concatenate_commands(p.commands,p.load_registers))
-
-
+        return create_for_downto(p.begin_for, concatenate_commands(p.commands, p.load_registers))
 
     @_('READ identifier SEMICOLON')
     def command(self, p):
@@ -178,21 +182,21 @@ class MyParser(Parser):
         a[0].is_blocked = True
         return a
 
-    @_('value LGTR value',)
-    def condition(self, p):
-        return prepare_condition_result(p.value0, p.value1, condition_lgtr)
-
     @_('value RGTR value', )
     def condition(self, p):
         return prepare_condition_result(p.value0, p.value1, condition_rgtr)
 
-    @_('value LEQ value', )
+    @_('value LGTR value', )
     def condition(self, p):
-        return prepare_condition_result(p.value0, p.value1, condition_leq)
+        return prepare_condition_result(p.value0, p.value1, condition_lgtr)
 
     @_('value REQ value', )
     def condition(self, p):
         return prepare_condition_result(p.value0, p.value1, condition_req)
+
+    @_('value LEQ value', )
+    def condition(self, p):
+        return prepare_condition_result(p.value0, p.value1, condition_leq)
 
     # return variable1, viariable2, function
     @_('value EQ value')
