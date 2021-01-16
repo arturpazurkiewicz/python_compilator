@@ -51,10 +51,10 @@ class Special(Variable):
 
 
 class ForVariable(Variable):
-    def __init__(self, name, value_from, value_to, memory_address):
+    def __init__(self, name, variable_from, variable_to, memory_address):
         super().__init__(name, memory_address)
-        self.value_from = value_from
-        self.value_to = value_to
+        self.value_from = variable_from
+        self.value_to = variable_to
         self.assigned = True
 
 

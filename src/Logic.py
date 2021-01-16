@@ -1,3 +1,4 @@
+import copy
 from collections import deque
 
 free_memory = 0
@@ -5,6 +6,7 @@ declared_variables = {}
 registers = {}
 additional_numbers = []
 last_register_copy = deque()
+for_optimization = True
 from Models import *
 
 e_register = Register("e")
@@ -24,7 +26,7 @@ def declare_variables(pidentifier, start=None, end=None):
 
 
 def declare_for_variable(pidentifier):
-
+    pass
 
 
 def generate_memory_number(is_table, start=None, end=None):
@@ -67,26 +69,26 @@ def get_table(pidentifier, move):
     return TableValue(pidentifier, move)
 
 
-# return Register,[string],[LostRegister]
+# return Register,[string]
 def get_free_register():
     possible_registers = [register for register in registers.values() if not register.is_blocked]
     # restarted
     for reg in possible_registers:
         if reg.type is RegisterType.is_restarted:
-            return reg, [], []
+            return reg, []
     # unknown
     for reg in possible_registers:
         if reg.type is RegisterType.is_unknown:
-            return reg, [], []
+            return reg, []
     # variable (no need to save)
     for reg in possible_registers:
         if reg.type is RegisterType.is_variable:
-            return reg, [], [LostRegister(reg, reg.variable, reg.type)]
+            return reg, []
     # save variable
     for reg in possible_registers:
         if reg.type is RegisterType.is_to_save:
             # saving
-            return reg, save_register(reg), [LostRegister(reg, reg.variable, reg.type)]
+            return reg, save_register(reg)
 
     raise Exception("Could not find free register")
 
@@ -126,8 +128,8 @@ def save_register(register):
         string += [f"STORE {register.name} {f_register.name}"]
         return string
     elif isinstance(variable, TableValue):
-        print(f"Saving {register.variable.name} {register.variable.move.name}")
-        reg, string, lost_register = get_table_address_of_variable(variable)
+        print(f"Saving {register.variable.name} with move {register.variable.move.name}")
+        reg, string = get_table_address_of_variable(variable)
         string.append(f"STORE {register.name} {reg.name}")
         return string
 
@@ -144,38 +146,36 @@ def are_variables_same(var1, var2):
         return False
 
 
-# return Register, [string], [LostRegister]
+# return Register, [string]
 def get_table_address_of_variable(variable):
     if variable.memory_address is not None:
-        return f_register, generate_number(variable.memory_address, f_register), []
+        return f_register, generate_number(variable.memory_address, f_register)
     for register in registers.values():
         if register.variable is not None and are_variables_same(register.variable, variable.move):
             if are_variables_same(variable.move, register.variable):
                 move = register
                 string = []
-                lost_register = []
                 break
     else:
         string = load_normal_variable_to_register(variable.move, e_register)
         move = e_register
-        lost_register = []
     string += generate_number(variable.table.memory_address, f_register)
     string.append(f"ADD {f_register.name} {move.name}")
     if variable.table.start > 0:
         string += generate_number(variable.table.start, e_register)
         string.append(f"SUB {f_register.name} {e_register.name}")
-    return f_register, string, lost_register
+    return f_register, string
 
 
-# return Register,[string],[LostRegister]
+# return Register,[string]
 def load_variable_to_register(variable):
     for register in registers.values():
         if are_variables_same(variable, register.variable):
-            return register, [], []
+            return register, []
 
-    a, b, c = get_free_register()
-    b1, c1 = load_variable_to_specific_register(variable, a)
-    return a, b + b1, c + c1
+    a, b = get_free_register()
+    b1 = load_variable_to_specific_register(variable, a)
+    return a, b + b1
     # a.variable = variable
     # a.type = RegisterType.is_variable
     # if isinstance(variable, TableValue):
@@ -187,7 +187,7 @@ def load_variable_to_register(variable):
     #     return a, b + load_normal_variable_to_register(variable, a), c
 
 
-# return [string], [LostRegs]
+# return [string]
 def load_variable_to_specific_register(variable, chosen_reg):
     pom_reg = None
     string = []
@@ -196,21 +196,23 @@ def load_variable_to_specific_register(variable, chosen_reg):
             pom_reg = register
             break
     if pom_reg is not None:
+        if pom_reg == chosen_reg:
+            return []
         if chosen_reg.type == RegisterType.is_to_save:
             string += save_register(chosen_reg)
         string += reset_register(chosen_reg)
         string.append(f"ADD {chosen_reg.name} {pom_reg.name}")
         chosen_reg.variable = variable
-        return string, []
+        return string
     else:
         chosen_reg.variable = variable
         chosen_reg.type = RegisterType.is_variable
         if isinstance(variable, TableValue):
-            a1, b1, c1 = get_table_address_of_variable(variable)
+            a1, b1 = get_table_address_of_variable(variable)
             b1.append(f"LOAD {chosen_reg.name} {a1.name}")
-            return string + b1, c1
+            return string + b1
         else:
-            return string + load_normal_variable_to_register(variable, chosen_reg), []
+            return string + load_normal_variable_to_register(variable, chosen_reg)
 
 
 # return [string]
@@ -240,15 +242,13 @@ def assign_value(identifier, info):
         raise Exception(f"For variable {identifier.name} is being modified!!!")
     old_reg = info[0]
     old_string = info[1]
-    lost_reg = info[2]
     if are_variables_same(identifier, old_reg.variable):
         print(f"Same variables: {identifier.name}, skip")
-        return old_string, lost_reg
+        return old_string
     if old_reg.type is RegisterType.is_to_save:
         old_string += save_register(old_reg)
-        lost_reg.append(LostRegister(old_reg, old_reg.variable, old_reg.type))
 
-        # usuwanie pozostałości z rejestru
+        # usuwanie pozostałości z rejestru - gdy tablica to usuwa wszystkie pozostałości
     for register in registers.values():
         if register.variable is not None:
             if register.variable.name == identifier.name:
@@ -256,36 +256,33 @@ def assign_value(identifier, info):
                     if register.variable.move.name == identifier.move.name:
                         print(
                             f"Czyszczenie rejestru {register.name} z pozostałości po {identifier.name} {identifier.move.name}")
-                        lost_reg.append(LostRegister(register, register.variable, old_reg.type))
                         register.type = RegisterType.is_unknown
                         register.variable = None
                         break
                 else:
                     print(f"Czyszczenie rejestru {register.name} z pozostałości po {identifier.name}")
-                    lost_reg.append(LostRegister(register, register.variable, old_reg.type))
                     register.type = RegisterType.is_unknown
                     register.variable = None
                     break
     old_reg.type = RegisterType.is_to_save
     old_reg.variable = identifier
     identifier.assigned = True
-    return old_string, lost_reg
+    return old_string
 
 
 def concatenate_commands(command1, command2):
-    strings = command1[0] + command2[0]
-    lost_regs = command1[1] + command2[1]
-    return strings, lost_regs
+    strings = command1 + command2
+    return strings
 
 
-# return Register,[string], [LostRegister]
+# return Register,[string]
 def load_memory_address_of_variable(variable):
     if variable.memory_address is not None:
         for register in registers.values():
             if isinstance(register, Number):
                 if register.value == variable.memory_address:
-                    return register, [], []
-        return f_register, generate_number(variable.memory_address, f_register), []
+                    return register, []
+        return f_register, generate_number(variable.memory_address, f_register)
     if isinstance(variable, TableValue):
         return get_table_address_of_variable(variable)
     if isinstance(variable, Number):
@@ -300,11 +297,10 @@ def load_memory_address_of_variable(variable):
     raise Exception("Unknown memory value!!!")
 
 
-# return [string], [LostRegister]
+# return [string]
 def write_value(variable):
     check_is_assigned(variable)
     string = []
-    lost_register = []
     # check if is variable not saved
     pom = None
     for register in registers.values():
@@ -323,10 +319,10 @@ def write_value(variable):
         # string += reset_register(pom)
         string += save_register(pom)
         string.append(f"PUT {f_register.name}")
-        return string, []
-    a, b, c = load_memory_address_of_variable(variable)
+        return string
+    a, b = load_memory_address_of_variable(variable)
     b.append(f"PUT {a.name}")
-    return string + b, lost_register + c
+    return string + b
 
 
 def check_is_assigned(variable):
@@ -351,11 +347,10 @@ def generate_additional_numbers():
     return string
 
 
-# return Register,[string], [LostRegister]
+# return Register,[string]
 def add_variables(info1, variable2):
     reg1 = info1[0]
     string = info1[1]
-    lost_regs = info1[2]
     if reg1.type == RegisterType.is_to_save:
         string += save_register(reg1)
     if are_variables_same(info1[0].variable, variable2):
@@ -365,19 +360,17 @@ def add_variables(info1, variable2):
     elif variable2.name == "0":
         pass
     else:
-        a, b, c = load_variable_to_register(variable2)
+        a, b = load_variable_to_register(variable2)
         string += b
-        lost_regs += c
         string.append(f"ADD {reg1.name} {a.name}")
     reg1.variable = None
     reg1.is_blocked = False
-    return reg1, string, lost_regs
+    return reg1, string
 
 
 def sub_variables(info1, variable2):
     reg1 = info1[0]
     string = info1[1]
-    lost_regs = info1[2]
     if reg1.type == RegisterType.is_to_save:
         string += save_register(reg1)
     elif are_variables_same(info1[0].variable, variable2):
@@ -387,20 +380,18 @@ def sub_variables(info1, variable2):
     elif variable2.name == "0":
         pass
     else:
-        a, b, c = load_variable_to_register(variable2)
+        a, b = load_variable_to_register(variable2)
         string += b
-        lost_regs += c
         string.append(f"SUB {reg1.name} {a.name}")
     reg1.variable = None
     reg1.is_blocked = False
-    return reg1, string, lost_regs
+    return reg1, string
 
 
 # TODO make optimizations
 def mul_variables(info1, variable2):
     r1 = info1[0]
     string = info1[1]
-    lost_regs = info1[2]
     check_is_assigned(r1.variable)
 
     if r1.type == RegisterType.is_to_save:
@@ -410,17 +401,16 @@ def mul_variables(info1, variable2):
     elif isinstance(r1, Number) and isinstance(variable2, Number):
         string += generate_number(int(r1.value * variable2.value), r1)
     else:
-        r2, b, c = load_variable_to_register(variable2)
+        r2, b = load_variable_to_register(variable2)
 
         if r1 == r2:
             print("Warning, same registers!!!")
-            r2, b, c = get_free_register()
+            r2, b = get_free_register()
         r2.is_blocked = True
-        result, b2, c3 = get_free_register()
+        result, b2 = get_free_register()
         string += b + b2
         if r2.type == RegisterType.is_to_save:
             string += save_register(r2)
-        lost_regs += c + c3
         string += [
             f"RESET {result.name}",
             f"ADD {result.name} {r2.name}",
@@ -450,16 +440,15 @@ def mul_variables(info1, variable2):
         r2.type = RegisterType.is_unknown
         r2.variable = None
         print(f"Mnożenie {r1}\n{r2}\n{result}")
-        return result, string, lost_regs
+        return result, string
     r1.is_blocked = False
     r1.variable = None
-    return r1, string, lost_regs
+    return r1, string
 
 
 def div_variables(info1, variable2):
     r1 = info1[0]
     string = info1[1]
-    lost_regs = info1[2]
     if r1.type == RegisterType.is_to_save:
         string += save_register(r1)
     if are_variables_same(info1[0].variable, variable2):
@@ -468,11 +457,10 @@ def div_variables(info1, variable2):
     elif isinstance(r1, Number) and isinstance(variable2, Number):
         string += generate_number(int(r1.value / variable2.value), r1)
     else:
-        r2, b, c = load_variable_to_register(variable2)
+        r2, b = load_variable_to_register(variable2)
         r2.is_blocked = True
-        result, b2, c3 = get_free_register()
+        result, b2 = get_free_register()
         string += b + b2
-        lost_regs += c + c3
         string += [
             f"RESET {result.name}",
             f"JZERO {r2.name} 26",
@@ -506,16 +494,15 @@ def div_variables(info1, variable2):
         r1.is_blocked = False
         r1.variable = None
         r1.type = RegisterType.is_unknown
-        return result, string, lost_regs
+        return result, string
     r1.is_blocked = False
     r1.variable = None
-    return r1, string, lost_regs
+    return r1, string
 
 
 def mod_variables(info1, variable2):
     r1 = info1[0]
     string = info1[1]
-    lost_regs = info1[2]
     if r1.type == RegisterType.is_to_save:
         string += save_register(r1)
     if variable2.name == "0" or variable2.name == "0":
@@ -528,11 +515,10 @@ def mod_variables(info1, variable2):
         else:
             string += generate_number(r1.variable.value % variable2.value, r1)
     else:
-        r2, b, c = load_variable_to_register(variable2)
+        r2, b = load_variable_to_register(variable2)
         r2.is_blocked = True
-        result, b2, c3 = get_free_register()
+        result, b2 = get_free_register()
         string += b + b2
-        lost_regs += c + c3
         string += [
             f"JZERO  {r2.name} 28",
             f"JZERO  {r2.name} 26",
@@ -572,10 +558,10 @@ def mod_variables(info1, variable2):
         r1.type = RegisterType.is_unknown
         r2.variable = None
         r2.type = RegisterType.is_unknown
-        return result, string, lost_regs
+        return result, string
     r1.is_blocked = False
     r1.variable = None
-    return r1, string, lost_regs
+    return r1, string
 
 
 def read_variable(variable):
@@ -583,10 +569,10 @@ def read_variable(variable):
         if are_variables_same(register, variable):
             register.variable = None
             register.type = RegisterType.is_unknown
-    a, b, c = load_memory_address_of_variable(variable)
+    a, b = load_memory_address_of_variable(variable)
     b.append(f"GET {a.name}")
     variable.assigned = True
-    return b, c
+    return b
 
 
 def copy_of_registers():
@@ -605,7 +591,6 @@ def load_registers():
     last_copy = last_register_copy.pop()
     last_register_copy.append(last_copy)
     string = []
-    lostRegs = []
     for x in last_copy[0] + [last_copy[1], last_copy[2]]:
         real_reg = x.register
         was_type = x.register_type
@@ -618,8 +603,7 @@ def load_registers():
                 if real_reg.type == RegisterType.is_to_save:
                     string += save_register(real_reg)
                 z = load_variable_to_specific_register(was_variable, real_reg)
-                string += z[0]
-                lostRegs += z[1]
+                string += z
         elif was_type == RegisterType.is_to_save:
             if are_variables_same(was_variable, real_reg.variable):
                 if real_reg.type == RegisterType.is_to_save:
@@ -628,8 +612,7 @@ def load_registers():
                 if real_reg.type == RegisterType.is_to_save:
                     string += save_register(real_reg)
                 z = load_variable_to_specific_register(was_variable, real_reg)
-                string += z[0]
-                lostRegs += z[1]
+                string += z
                 real_reg.type = RegisterType.is_to_save
 
     for x in last_copy[0] + [last_copy[1], last_copy[2]]:
@@ -644,9 +627,8 @@ def load_registers():
             if real_reg.type == RegisterType.is_to_save:
                 string += save_register(real_reg)
                 string.append(f"RESET {real_reg.name}")
-            real_reg.variable = None
-            real_reg.type = RegisterType.is_restarted
-    return string, lostRegs
+            string += reset_register(real_reg)
+    return string
 
 
 # return [string],[LostRegs]
@@ -679,7 +661,7 @@ def condition_eq(reg1, reg2, commands_true, commands_false, normal_build=True):
         ]
         reg1.variable = None
         reg1.type = RegisterType.is_unknown
-        return string + string_true + string_false, []
+        return string + string_true + string_false
 
 
 # return [string],[LostRegs]
@@ -724,8 +706,8 @@ def condition_rgtr(reg1, reg2, commands_true, commands_false, normal_build=True)
         string = []
         if reg1.type == RegisterType.is_to_save:
             string += save_register(reg1)
-        string_true = commands_true[0]
-        string_false = commands_false[0]
+        string_true = commands_true
+        string_false = commands_false
         if normal_build:
             if len(string_false) != 0:
                 string_true.append(f"JUMP {len(string_false) + 1}")
@@ -737,7 +719,7 @@ def condition_rgtr(reg1, reg2, commands_true, commands_false, normal_build=True)
         ]
         reg1.variable = None
         reg1.type = RegisterType.is_unknown
-        return string + string_true + string_false, []
+        return string + string_true + string_false
 
 
 def condition_lgtr(reg1, reg2, commands_true, commands_false, normal_build=True):
@@ -753,9 +735,9 @@ def condition_req(reg1, reg2, commands_true, commands_false, normal_build=True):
 
 
 def prepare_condition_result(value0, value1, condition):
-    reg1, s1, c1 = load_variable_to_register(value0)
+    reg1, s1 = load_variable_to_register(value0)
     reg1.is_blocked = True
-    reg2, s2, c2 = load_variable_to_register(value1)
+    reg2, s2 = load_variable_to_register(value1)
     reg1.is_blocked = False
     return reg1, reg2, s1 + s2, condition
 
@@ -764,6 +746,166 @@ def remove_copy_of_registers():
     last_register_copy.pop()
 
 
-# return
-def create_for_pidentifier(pidentifier):
-    pass
+# will be using e_register - e_register is restarted but program dont know that
+# return Register,RegisterTo, [string], ForVariable
+def begin_for_to(pidentifier, pidentifier_start, pidentifier_end):
+    if pidentifier in declared_variables:
+        raise Exception("Variable " + pidentifier + " already exist!!!")
+    new_end = copy.deepcopy(pidentifier_end)
+    new_end.name = "^" + pidentifier
+    new_end.memory_address = generate_memory_number(False)
+    a = ForVariable(pidentifier, pidentifier_start, new_end, generate_memory_number(False))
+    declared_variables[pidentifier] = a
+    r1, string = load_variable_to_register(pidentifier_start)
+    if r1.type is RegisterType.is_to_save:
+        string += save_register(r1)
+    r1.is_blocked = True
+    r1.variable = a
+    r1.type = RegisterType.is_to_save
+    r2, s2 = load_variable_to_register(pidentifier_end)
+    string += s2
+    if r2.type is RegisterType.is_to_save:
+        string += save_register(r2)
+    r2.variable = new_end
+    r2.type = RegisterType.is_to_save
+    # saving
+    if r2.type is RegisterType.is_to_save:
+        string += save_register(r2)
+    string += reset_register(e_register)
+    e_register.type = RegisterType.is_unknown
+    r1.is_blocked = False
+
+    return r1, r2, string, a
+
+
+# will be using e_register - e_register is restarted but program dont know that
+# return Register,RegisterTo, [string], ForVariable
+def begin_for_downto(pidentifier, pidentifier_start, pidentifier_end):
+    if pidentifier in declared_variables:
+        raise Exception("Variable " + pidentifier + " already exist!!!")
+    new_end = copy.deepcopy(pidentifier_end)
+    new_end.name = "_" + pidentifier
+    new_end.memory_address = generate_memory_number(False)
+    a = ForVariable(pidentifier, pidentifier_start, new_end, generate_memory_number(False))
+    declared_variables[pidentifier] = a
+    r1, string = load_variable_to_register(pidentifier_start)
+    if r1.type is RegisterType.is_to_save:
+        string += save_register(r1)
+    r1.is_blocked = True
+    r1.variable = a
+    r1.type = RegisterType.is_to_save
+    r2, s2 = load_variable_to_register(pidentifier_end)
+    string += s2
+    if r2.type is RegisterType.is_to_save:
+        string += save_register(r2)
+    r2.variable = new_end
+    r2.type = RegisterType.is_to_save
+    # saving
+    if r2.type is RegisterType.is_to_save:
+        string += save_register(r2)
+    string += reset_register(e_register)
+    e_register.type = RegisterType.is_unknown
+    r1.is_blocked = False
+
+    return r1, r2, string, a
+
+
+# input: begin_for_to, commands,
+# return [string]
+def create_for_to(start_of_for_to, commands):
+    for_variable = start_of_for_to[3]
+    last_register_copy.pop()
+    if isinstance(for_variable.value_from, Number) and isinstance(for_variable.value_to, Number):
+        if for_variable.value_from.value > for_variable.value_to.value:
+            load_registers()
+            last_register_copy.pop()
+            return []
+        else:
+            if for_optimization:
+                last_register_copy.pop()
+                result = start_of_for_to[2] + commands
+                b = [f"INC {start_of_for_to[0].name}"] + commands
+                result += b * (for_variable.value_to.value - for_variable.value_from.value)
+                return result
+    if len(commands) > 0:
+        r1 = start_of_for_to[0]
+        r2 = start_of_for_to[1]
+        string = start_of_for_to[2]
+        p1 = len(string)
+        string += [
+            f"ADD {e_register.name} {r1.name}",  # copy of r1
+            f"SUB {e_register.name} {r2.name}",
+            f"JZERO {e_register.name} 2",
+            f"JUMP end",
+        ]
+        string += commands
+        string += load_variable_to_specific_register(for_variable.value_to, r2)
+        r1.type = RegisterType.is_to_save
+        # p2 = len(string)
+        string += [
+            # f"JZERO {r1.name} end",
+            f"INC {r1.name}"
+        ]
+        p3 = len(string)
+        string.append("JUMP start")
+        # replacing
+        string[p1 + 3] = f"JUMP {len(string) - p1 - 3}"
+        # string[p2] = f"JZERO {r1.name} {len(string) - p2}"
+        string[p3] = f"JUMP {p1 - p3}"
+        j1 = len(start_of_for_to[2]) + 2
+        last_register_copy.pop()
+        return string
+    else:
+        load_registers()
+        last_register_copy.pop()
+        return []
+
+
+def create_for_downto(start_of_for_to, commands):
+    for_variable = start_of_for_to[3]
+    last_register_copy.pop()
+    if isinstance(for_variable.value_from, Number) and isinstance(for_variable.value_to, Number):
+        if for_variable.value_from.value < for_variable.value_to.value:
+            load_registers()
+            last_register_copy.pop()
+            return []
+        else:
+            if for_optimization:
+                last_register_copy.pop()
+                result = start_of_for_to[2] + commands
+                b = [f"DEC {start_of_for_to[0].name}"] + commands
+                result += b * (for_variable.value_from.value - for_variable.value_to.value)
+                return result
+    if len(commands) > 0:
+        r1 = start_of_for_to[0]
+        r2 = start_of_for_to[1]
+        string = start_of_for_to[2]
+        p1 = len(string)
+        string += [
+            f"ADD {e_register.name} {r1.name}",  # copy of r1
+            f"SUB {e_register.name} {r2.name}",
+            f"JZERO {e_register.name} 2",
+            f"JUMP end",
+        ]
+        string += commands
+        string += load_variable_to_specific_register(for_variable.value_to, r2)
+        r1.type = RegisterType.is_to_save
+        # p2 = len(string)
+        string += [
+            # f"JZERO {r1.name} end",
+            f"INC {r1.name}"
+        ]
+        p3 = len(string)
+        string.append("JUMP start")
+        # replacing
+        string[p1 + 3] = f"JUMP {len(string) - p1 - 3}"
+        # string[p2] = f"JZERO {r1.name} {len(string) - p2}"
+        string[p3] = f"JUMP {p1 - p3}"
+        j1 = len(start_of_for_to[2]) + 2
+        last_register_copy.pop()
+        return string
+    else:
+        load_registers()
+        last_register_copy.pop()
+        return []
+
