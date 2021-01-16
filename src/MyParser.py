@@ -110,9 +110,9 @@ class MyParser(Parser):
     def command(self, p):
         reg1, reg2, var1, var2, cond_str, condition = p.condition
         string = condition(reg1, reg2, var1, var2, p.commands, [],
-                           mode=ConditionMode.is_repeat)
+                           mode=ConditionMode.is_repeat, cond_str=cond_str)
         remove_copy_of_registers()
-        return cond_str + string
+        return string
 
     @_(
         'FOR PIDENTIFIER  FROM value TO value DO copy_of_registers begin_for copy_of_registers commands ENDFOR load_registers')
