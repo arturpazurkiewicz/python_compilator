@@ -236,10 +236,12 @@ def reset_register(register):
         return [f"RESET {register.name}"]
 
 
-# return [string],[LostRegister]
+# return [string]
 def assign_value(identifier, info):
     if isinstance(identifier, ForVariable):
-        raise Exception(f"For variable {identifier.name} is being modified!!!")
+        raise Exception(f"For variable {identifier.name} cannot be modified!!!")
+    if isinstance(identifier, TableValue):
+        return assign_table_array(identifier, info)
     old_reg = info[0]
     old_string = info[1]
     if are_variables_same(identifier, old_reg.variable):
@@ -252,22 +254,41 @@ def assign_value(identifier, info):
     for register in registers.values():
         if register.variable is not None:
             if register.variable.name == identifier.name:
-                if isinstance(register.variable, TableValue):
-                    if register.variable.move.name == identifier.move.name:
-                        print(
-                            f"Czyszczenie rejestru {register.name} z pozostałości po {identifier.name} {identifier.move.name}")
-                        register.type = RegisterType.is_unknown
-                        register.variable = None
-                        break
-                else:
-                    print(f"Czyszczenie rejestru {register.name} z pozostałości po {identifier.name}")
-                    register.type = RegisterType.is_unknown
-                    register.variable = None
-                    break
+                print(f"Czyszczenie rejestru {register.name} z pozostałości po {identifier.name}")
+                register.type = RegisterType.is_unknown
+                register.variable = None
+                break
     old_reg.type = RegisterType.is_to_save
     old_reg.variable = identifier
     identifier.assigned = True
     return old_string
+
+
+def assign_table_array(identifier, info):
+    old_reg = info[0]
+    string = info[1]
+    if old_reg.type is RegisterType.is_to_save:
+        string += save_register(old_reg)
+    if isinstance(identifier, Number):
+        for register in registers.values():
+            if register.variable is not None:
+                if register.variable.name == identifier.name:
+                    if not isinstance(register.variable.move, Number):
+                        if register.type == RegisterType.is_to_save:
+                            string += save_register(register)
+                        register.type = RegisterType.is_unknown
+                        register.variable = None
+    else:
+        for register in registers.values():
+            if register.variable is not None:
+                if register.variable.name == identifier.name:
+                    if register.type == RegisterType.is_to_save:
+                        string += save_register(register)
+                    register.type = RegisterType.is_unknown
+                    register.variable = None
+    old_reg.type = RegisterType.is_to_save
+    old_reg.variable = identifier
+    return string
 
 
 def concatenate_commands(command1, command2):
@@ -307,9 +328,7 @@ def write_value(variable):
         if register.variable is not None:
             if variable.name == register.variable.name:
                 if isinstance(variable, TableValue):
-                    if variable.move.name == register.variable.move.name:
-                        pom = register
-                        break
+                    string += save_register(register)
                 else:
                     pom = register
                     break
@@ -565,6 +584,8 @@ def mod_variables(info1, variable2):
 
 
 def read_variable(variable):
+    if isinstance(variable, ForVariable):
+        raise Exception(f"For variable {variable.name} cannot be modified!!!")
     for register in registers.values():
         if are_variables_same(register, variable):
             register.variable = None
@@ -748,7 +769,7 @@ def remove_copy_of_registers():
 
 # will be using e_register - e_register is restarted but program dont know that
 # return Register,RegisterTo, [string], ForVariable
-def begin_for_to(pidentifier, pidentifier_start, pidentifier_end):
+def begin_for(pidentifier, pidentifier_start, pidentifier_end):
     if pidentifier in declared_variables:
         raise Exception("Variable " + pidentifier + " already exist!!!")
     new_end = copy.deepcopy(pidentifier_end)
@@ -778,39 +799,7 @@ def begin_for_to(pidentifier, pidentifier_start, pidentifier_end):
     return r1, r2, string, a
 
 
-# will be using e_register - e_register is restarted but program dont know that
-# return Register,RegisterTo, [string], ForVariable
-def begin_for_downto(pidentifier, pidentifier_start, pidentifier_end):
-    if pidentifier in declared_variables:
-        raise Exception("Variable " + pidentifier + " already exist!!!")
-    new_end = copy.deepcopy(pidentifier_end)
-    new_end.name = "_" + pidentifier
-    new_end.memory_address = generate_memory_number(False)
-    a = ForVariable(pidentifier, pidentifier_start, new_end, generate_memory_number(False))
-    declared_variables[pidentifier] = a
-    r1, string = load_variable_to_register(pidentifier_start)
-    if r1.type is RegisterType.is_to_save:
-        string += save_register(r1)
-    r1.is_blocked = True
-    r1.variable = a
-    r1.type = RegisterType.is_to_save
-    r2, s2 = load_variable_to_register(pidentifier_end)
-    string += s2
-    if r2.type is RegisterType.is_to_save:
-        string += save_register(r2)
-    r2.variable = new_end
-    r2.type = RegisterType.is_to_save
-    # saving
-    if r2.type is RegisterType.is_to_save:
-        string += save_register(r2)
-    string += reset_register(e_register)
-    e_register.type = RegisterType.is_unknown
-    r1.is_blocked = False
-
-    return r1, r2, string, a
-
-
-# input: begin_for_to, commands,
+# input: begin_for, commands,
 # return [string]
 def create_for_to(start_of_for_to, commands):
     for_variable = start_of_for_to[3]
@@ -839,6 +828,7 @@ def create_for_to(start_of_for_to, commands):
             f"JUMP end",
         ]
         string += commands
+        string += reset_register(e_register)
         string += load_variable_to_specific_register(for_variable.value_to, r2)
         r1.type = RegisterType.is_to_save
         # p2 = len(string)
@@ -852,7 +842,6 @@ def create_for_to(start_of_for_to, commands):
         string[p1 + 3] = f"JUMP {len(string) - p1 - 3}"
         # string[p2] = f"JZERO {r1.name} {len(string) - p2}"
         string[p3] = f"JUMP {p1 - p3}"
-        j1 = len(start_of_for_to[2]) + 2
         last_register_copy.pop()
         return string
     else:
@@ -882,30 +871,29 @@ def create_for_downto(start_of_for_to, commands):
         string = start_of_for_to[2]
         p1 = len(string)
         string += [
-            f"ADD {e_register.name} {r1.name}",  # copy of r1
-            f"SUB {e_register.name} {r2.name}",
+            f"ADD {e_register.name} {r2.name}",  # copy of r1
+            f"SUB {e_register.name} {r1.name}",
             f"JZERO {e_register.name} 2",
             f"JUMP end",
         ]
         string += commands
+        string += reset_register(e_register)
         string += load_variable_to_specific_register(for_variable.value_to, r2)
         r1.type = RegisterType.is_to_save
-        # p2 = len(string)
+        p2 = len(string)
         string += [
-            # f"JZERO {r1.name} end",
-            f"INC {r1.name}"
+            f"JZERO {r1.name} end",
+            f"DEC {r1.name}"
         ]
         p3 = len(string)
         string.append("JUMP start")
         # replacing
         string[p1 + 3] = f"JUMP {len(string) - p1 - 3}"
-        # string[p2] = f"JZERO {r1.name} {len(string) - p2}"
+        string[p2] = f"JZERO {r1.name} {len(string) - p2}"
         string[p3] = f"JUMP {p1 - p3}"
-        j1 = len(start_of_for_to[2]) + 2
         last_register_copy.pop()
         return string
     else:
         load_registers()
         last_register_copy.pop()
         return []
-
