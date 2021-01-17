@@ -605,7 +605,7 @@ def read_variable(variable):
     if isinstance(variable, ForVariable):
         raise Exception(f"For variable {variable.name} cannot be modified!!!")
     for register in registers.values():
-        if are_variables_same(register, variable):
+        if are_variables_same(register.variable, variable):
             register.variable = None
             register.type = RegisterType.is_unknown
     a, b = load_memory_address_of_variable(variable)
@@ -723,7 +723,7 @@ def condition_eq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Con
     elif mode == ConditionMode.is_repeat:
         loader = load_registers()
         if len(loader) > 0:
-            loader = [f"JUMP {1 + len(loader)}"] + loader
+            loader = [f"JUMP {len(loader)}"] + loader
         if variable_was_in_copy(reg1):
             commands = [
                 f"ADD {e_register.name} {reg1.name}",
@@ -778,7 +778,7 @@ def condition_neq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
     elif mode == ConditionMode.is_repeat:
         loader = load_registers()
         if len(loader) > 0:
-            loader = [f"JUMP {1 + len(loader)}"] + loader
+            loader = [f"JUMP {len(loader)}"] + loader
         if variable_was_in_copy(reg1):
             commands = [
                 f"ADD {e_register.name} {reg1.name}",
@@ -848,7 +848,7 @@ def condition_lgtr(reg1, reg2, var1, var2, commands_true, commands_false, mode=C
     elif mode == ConditionMode.is_repeat:
         loader = load_registers()
         if len(loader) > 0:
-            loader = [f"JUMP {1 + len(loader)}"] + loader
+            loader = [f"JUMP {len(loader)}"] + loader
         if variable_was_in_copy(reg1):
             commands = [
                 f"ADD {e_register.name} {reg1.name}",
@@ -916,24 +916,25 @@ def condition_leq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
         return string + commands_true
     elif mode == ConditionMode.is_repeat:
         loader = load_registers()
-        if len(loader) > 0:
-            loader = [f"JUMP {1 + len(loader)}"] + loader
-        if variable_was_in_copy(reg1):
+        # if len(loader) > 0:
+        loader = [f"JUMP {len(loader)}"] + loader
+        if variable_was_in_copy(reg2):
             commands = [
                 f"ADD {e_register.name} {reg2.name}",
                 f"SUB {e_register.name} {reg1.name}",
                 f"JZERO {e_register.name} 2",
-                f"JUMP {- len(commands_true) - 3 - len(loader) - len(cond_str)}"
+                f"JUMP {- len(commands_true) - 2 - len(loader) - len(cond_str)}"
             ]
         else:
             commands = [
                 f"SUB {reg2.name} {reg1.name}",
                 f"JZERO {reg2.name} 2",
-                f"JUMP {- len(commands_true) - 2 - len(loader) - len(cond_str)}"
+                f"JUMP {- len(commands_true) - 1 - len(loader) - len(cond_str)}"
             ]
             reg2.variable = None
             reg2.type = RegisterType.is_restarted
-        return cond_str + loader + commands_true + commands
+        #     poprawiony return
+        return loader + commands_true + cond_str + commands
 
 
 def condition_rgtr(reg1, reg2, var1, var2, commands_true, commands_false, mode=ConditionMode.is_if, cond_str=None):
