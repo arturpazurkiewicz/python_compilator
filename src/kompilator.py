@@ -1,4 +1,6 @@
 import argparse
+import sys
+
 from MyLexer import MyLexer
 from MyParser import MyParser
 from Logic import declared_variables, initialize_registers, registers, get_free_register, save_register, \
@@ -25,11 +27,14 @@ if __name__ == '__main__':
         code = input_file.read()
         lexer = MyLexer()
         parser = MyParser()
-        # try:
-        parse_ready = lexer.tokenize(code)
-        commands = parser.parse(parse_ready) + ["HALT"]
-        # except Exception as e:
-        #     print(e)
+        commands = []
+        try:
+          parse_ready = lexer.tokenize(code)
+          commands = parser.parse(parse_ready) + ["HALT"]
+        except Exception as e:
+            print(e)
+            sys.exit(-1)
+
         commands = generate_additional_numbers() + commands
     with open(args.output_file, 'w') as output_file:
         output_file.write("\n".join(commands))

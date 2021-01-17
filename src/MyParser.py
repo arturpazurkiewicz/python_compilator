@@ -114,10 +114,11 @@ class MyParser(Parser):
         remove_copy_of_registers()
         return string
 
+    # load_registers inside method!!!
     @_(
         'FOR PIDENTIFIER  FROM value TO value DO copy_of_registers begin_for copy_of_registers commands ENDFOR load_registers')
     def command(self, p):
-        return create_for_to(p.begin_for, concatenate_commands(p.commands, p.load_registers))
+        return ["\n"] +create_for_to(p.begin_for, concatenate_commands(p.commands, p.load_registers)) + ["\n"]
 
     @_('')
     def begin_for(self, p):
@@ -126,7 +127,7 @@ class MyParser(Parser):
     @_(
         'FOR PIDENTIFIER  FROM value DOWNTO value DO copy_of_registers begin_for copy_of_registers commands ENDFOR load_registers')
     def command(self, p):
-        return create_for_downto(p.begin_for, concatenate_commands(p.commands, p.load_registers))
+        return ["\n"] +create_for_downto(p.begin_for, concatenate_commands(p.commands, p.load_registers))+["\n"]
 
     @_('READ identifier SEMICOLON')
     def command(self, p):

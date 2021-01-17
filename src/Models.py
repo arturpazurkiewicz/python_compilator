@@ -36,6 +36,10 @@ class TableValue(Variable):
         self.table = declared_variables[name]
         self.move = move
         memory_address = None
+        # if not isinstance(, Table):
+        #     raise Exception(f"Invalid use {name}")
+        if isinstance(move, (Table,TableValue)):
+            raise Exception("Invalid table move")
         if isinstance(move, Number):
             if not (self.table.start <= move.value <= self.table.end):
                 raise Exception("A range outside the array value " + name)
