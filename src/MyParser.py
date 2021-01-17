@@ -4,7 +4,7 @@ from Logic import declare_variables, get_variable, get_table, load_variable_to_r
     concatenate_commands, write_value, add_variables, sub_variables, mul_variables, read_variable, div_variables, \
     mod_variables, copy_of_registers, condition_eq, load_registers, prepare_condition_result, condition_neq, \
     condition_lgtr, condition_rgtr, condition_req, condition_leq, remove_copy_of_registers, begin_for, \
-    create_for_to, create_for_downto, ConditionMode
+    create_for_to, create_for_downto, ConditionMode, check_is_assigned
 from MyLexer import MyLexer
 
 
@@ -144,40 +144,43 @@ class MyParser(Parser):
 
     @_('value')
     def expression(self, p):
+        check_is_assigned(p.value)
         z = load_variable_to_register(p.value)
         return z
 
     @_('blocked_register MOD value')
     def expression(self, p):
         a = p.blocked_register
-        z = mod_variables(a, p.value)
+        z = mod_variables(a, p.value, p[-5])
         return z
 
     @_('blocked_register ADD value')
     def expression(self, p):
+        y = p[-5]
         a = p.blocked_register
-        z = add_variables(a, p.value)
+        z = add_variables(a, p.value, y)
         return z
 
     @_('blocked_register DIV value')
     def expression(self, p):
         a = p.blocked_register
-        z = div_variables(a, p.value)
+        z = div_variables(a, p.value, p[-5])
         return z
 
     @_('blocked_register SUB value')
     def expression(self, p):
         a = p.blocked_register
-        return sub_variables(a, p.value)
+        return sub_variables(a, p.value, p[-5])
 
     @_('blocked_register MUL value')
     def expression(self, p):
         a = p.blocked_register
-        z = mul_variables(a, p.value)
+        z = mul_variables(a, p.value, p[-5])
         return z
 
     @_('value')
     def blocked_register(self, p):
+        check_is_assigned(p.value)
         a = load_variable_to_register(p.value)
         a[0].is_blocked = True
         return a
