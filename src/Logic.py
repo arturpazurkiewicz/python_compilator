@@ -758,8 +758,8 @@ def condition_eq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Con
                 return commands_false
         else:
             string = []
-            if reg1.type == RegisterType.is_to_save:
-                string += save_register(reg1)
+            # if reg1.type == RegisterType.is_to_save:
+            #     string += save_register(reg1)
             string_true = commands_true
             string_false = commands_false
 
@@ -857,7 +857,7 @@ def condition_neq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
             f"DEC {e_register.name}",
             f"JZERO {e_register.name} {2 + len(commands_true)}"
         ]
-        commands_true.append(f"JUMP {-6 - len(commands_true)}")
+        commands_true.append(f"JUMP {-7 - len(commands_true)}")
         e_register.type = RegisterType.is_unknown
         e_register.variable = None
         return string + commands_true
