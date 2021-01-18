@@ -530,9 +530,9 @@ def div_variables(info1, variable2, assigned_to):
             string += save_register(r1)
     if variable2.name == 0 or variable2.name == 0:
         string.append(f"RESET {r1.name}")
-    elif are_variables_same(info1[0].variable, variable2):
-        string.append(f"RESET {r1.name}")
-        string.append(f"INC {r1.name}")
+    # elif are_variables_same(info1[0].variable, variable2):
+    #     string.append(f"RESET {r1.name}")
+    #     string.append(f"INC {r1.name}")
     elif isinstance(r1, Number) and isinstance(variable2, Number):
         string += generate_number(int(r1.value / variable2.value), r1)
     elif isinstance(variable2, Number) and is_power_of_two(variable2.value):
@@ -855,7 +855,7 @@ def condition_neq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
         commands_true.append(f"JUMP {-6 - len(commands_true)}")
         e_register.type = RegisterType.is_unknown
         e_register.variable = None
-        return string + commands_true
+        return string + commands_true + cond_str
     elif mode == ConditionMode.is_repeat:
         z = load_registers()
         loader = []

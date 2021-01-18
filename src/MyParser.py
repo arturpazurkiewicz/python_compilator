@@ -65,12 +65,12 @@ class MyParser(Parser):
 
     @_('')
     def copy_of_registers(self, p):
-        print("Registers saved")
+        # print("Registers saved")
         return copy_of_registers()
 
     @_('')
     def load_registers(self, p):
-        print("Registers loaded!")
+        # print("Registers loaded!")
         return load_registers()
 
     @_('identifier ASSIGN expression SEMICOLON')
@@ -100,8 +100,9 @@ class MyParser(Parser):
     @_('WHILE condition DO copy_of_registers commands ENDWHILE load_registers')
     def command(self, p):
         reg1, reg2, var1, var2, cond_str, condition = p.condition
-        string = condition(reg1, reg2, var1, var2, concatenate_commands(p.commands, p.load_registers, ), [],
-                           mode=ConditionMode.is_while)
+        z = p.load_registers
+        string = condition(reg1, reg2, var1, var2, concatenate_commands(p.commands, p.load_registers), [],
+                           mode=ConditionMode.is_while, cond_str=cond_str)
         remove_copy_of_registers()
         return cond_str + string
 
@@ -118,7 +119,7 @@ class MyParser(Parser):
     @_(
         'FOR PIDENTIFIER  FROM value TO value DO copy_of_registers begin_for copy_of_registers commands ENDFOR load_registers')
     def command(self, p):
-        return ["\n"] +create_for_to(p.begin_for, concatenate_commands(p.commands, p.load_registers)) + ["\n"]
+        return create_for_to(p.begin_for, concatenate_commands(p.commands, p.load_registers))
 
     @_('')
     def begin_for(self, p):
@@ -127,7 +128,8 @@ class MyParser(Parser):
     @_(
         'FOR PIDENTIFIER  FROM value DOWNTO value DO copy_of_registers begin_for copy_of_registers commands ENDFOR load_registers')
     def command(self, p):
-        return ["\n"] +create_for_downto(p.begin_for, concatenate_commands(p.commands, p.load_registers))+["\n"]
+
+        return create_for_downto(p.begin_for, concatenate_commands(p.commands, p.load_registers))
 
     @_('READ identifier SEMICOLON')
     def command(self, p):
