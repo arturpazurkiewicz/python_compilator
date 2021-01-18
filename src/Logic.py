@@ -72,6 +72,8 @@ def get_variable(pidentifier, line):
 # return TableValue
 def get_table(pidentifier, move, line):
     check_is_assigned(move, line)
+    if not isinstance(declared_variables[pidentifier], Table):
+        raise Exception(f"{pidentifier} is not a table"+ f"\nLine {line}")
     return TableValue(pidentifier, move, line)
 
 
@@ -802,17 +804,19 @@ def condition_eq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Con
         z = load_registers()
         loader = []
         loader += z
+        it = 0
         if len(loader) > 0:
+            it = 1
             loader = [f"JUMP {len(loader) + 1}"] + loader
         if variable_was_in_copy(reg1):
             commands = [
                 f"ADD {e_register.name} {reg1.name}",
                 f"INC {e_register.name}",
                 f"SUB {e_register.name} {reg2.name}",
-                f"JZERO {e_register.name} {-3 - len(commands_true) - len(loader) - len(cond_str)}",
+                f"JZERO {e_register.name} {-3 - len(commands_true) - len(loader) - len(cond_str) + it}",
                 f"DEC {e_register.name}",
                 f"JZERO {e_register.name} {2}",
-                f"JUMP {- len(commands_true) - 6 - len(loader) - len(cond_str)}"
+                f"JUMP {- len(commands_true) - 6 - len(loader) - len(cond_str) + it}"
             ]
             e_register.type = RegisterType.is_unknown
             e_register.variable = None
@@ -820,14 +824,15 @@ def condition_eq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Con
             commands = [
                 f"INC {reg1.name}",
                 f"SUB {reg1.name} {reg2.name}",
-                f"JZERO {reg1.name} {-2 - len(commands_true) - len(loader) - len(cond_str)}",
+                f"JZERO {reg1.name} {-2 - len(commands_true) - len(loader) - len(cond_str) + it}",
                 f"DEC {reg1.name}",
                 f"JZERO {reg1.name} {2}",
-                f"JUMP {- len(commands_true) - 5 - len(loader) - len(cond_str)}"
+                f"JUMP {- len(commands_true) - 5 - len(loader) - len(cond_str) + it}"
             ]
             reg1.variable = None
             reg1.type = RegisterType.is_restarted
-        return loader + commands_true + cond_str + commands + z
+        x = loader + commands_true + cond_str + commands + z
+        return x
 
 
 # return [string],[LostRegs]
@@ -862,7 +867,9 @@ def condition_neq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
         z = load_registers()
         loader = []
         loader += z
+        it = 0
         if len(loader) > 0:
+            it = 1
             loader = [f"JUMP {len(loader) + 1}"] + loader
         if variable_was_in_copy(reg1):
             commands = [
@@ -871,7 +878,7 @@ def condition_neq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
                 f"SUB {e_register.name} {reg2.name}",
                 f"JZERO {e_register.name} {3}",
                 f"DEC {e_register.name}",
-                f"JZERO {e_register.name} {- len(commands_true) - 5 - len(loader) - len(cond_str)}"
+                f"JZERO {e_register.name} {- len(commands_true) - 5 - len(loader) - len(cond_str) + it}"
             ]
             e_register.type = RegisterType.is_unknown
             e_register.variable = None
@@ -881,7 +888,7 @@ def condition_neq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
                 f"SUB {reg1.name} {reg2.name}",
                 f"JZERO {reg1.name} {3}",
                 f"DEC {reg1.name}",
-                f"JZERO {reg1.name} {- len(commands_true) - 4 - len(loader) - len(cond_str)}"
+                f"JZERO {reg1.name} {- len(commands_true) - 4 - len(loader) - len(cond_str) + it}"
             ]
             reg1.variable = None
             reg1.type = RegisterType.is_restarted
@@ -936,28 +943,30 @@ def condition_lgtr(reg1, reg2, var1, var2, commands_true, commands_false, mode=C
         commands_true.append(f"JUMP {-3 - len(commands_true)}")
         return string + commands_true
     elif mode == ConditionMode.is_repeat:
-        reg1.variable = None
-        reg1.type = RegisterType.is_restarted
         z = load_registers()
         loader = []
         loader += z
+        it = 0
         if len(loader) > 0:
+            it = 1
             loader = [f"JUMP {len(loader) + 1}"] + loader
         if variable_was_in_copy(reg1):
             commands = [
                 f"ADD {e_register.name} {reg1.name}",
                 f"SUB {e_register.name} {reg2.name}",
-                f"JZERO {e_register.name} {- len(commands_true) - 2 - len(loader) - len(cond_str)}",
+                f"JZERO {e_register.name} {- len(commands_true) - 2 - len(loader) - len(cond_str) + it}",
             ]
+            e_register.type = RegisterType.is_unknown
+            e_register.variable = None
         else:
             # a > b
             commands = [
                 f"SUB {reg1.name} {reg2.name}",
-                f"JZERO {reg1.name} {- len(commands_true) - 1 - len(loader) - len(cond_str)}",
+                f"JZERO {reg1.name} {- len(commands_true) - 1 - len(loader) - len(cond_str) + it}",
             ]
+            reg1.variable = None
+            reg1.type = RegisterType.is_restarted
 
-        e_register.type = RegisterType.is_unknown
-        e_register.variable = None
         x = loader + commands_true + cond_str + commands + z
         return x
 
@@ -1018,14 +1027,16 @@ def condition_leq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
         z = load_registers()
         loader = []
         loader += z
-        # if len(loader) > 0:
-        loader = [f"JUMP {len(loader) + 1}"] + loader
+        it = 0
+        if len(loader) > 0:
+            it = 1
+            loader = [f"JUMP {len(loader) + 1}"] + loader
         if variable_was_in_copy(reg2):
             commands = [
                 f"ADD {e_register.name} {reg2.name}",
                 f"SUB {e_register.name} {reg1.name}",
                 f"JZERO {e_register.name} 2",
-                f"JUMP {- len(commands_true) - 2 - len(loader) - len(cond_str)}"
+                f"JUMP {- len(commands_true) - 3 - len(loader) - len(cond_str) + it}"
             ]
             e_register.type = RegisterType.is_unknown
             e_register.variable = None
@@ -1033,12 +1044,13 @@ def condition_leq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
             commands = [
                 f"SUB {reg2.name} {reg1.name}",
                 f"JZERO {reg2.name} 2",
-                f"JUMP {- len(commands_true) - 1 - len(loader) - len(cond_str)}"
+                f"JUMP {- len(commands_true) - 2 - len(loader) - len(cond_str) + it}"
             ]
             reg2.variable = None
             reg2.type = RegisterType.is_restarted
-        #     poprawiony return
-        return loader + commands_true + cond_str + commands + z
+        #     fixed return
+        x = loader + commands_true + cond_str + commands + z
+        return x
 
 
 def condition_rgtr(reg1, reg2, var1, var2, commands_true, commands_false, mode=ConditionMode.is_if, cond_str=None):
