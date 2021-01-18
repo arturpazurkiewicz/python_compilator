@@ -53,11 +53,16 @@ class MyLexer(Lexer):
         return t
 
     ignore = " \t\r"
-    ignore_comment = r'\[[^\]]*\]'
+
+    @_(r'\[[^\]]*\]')
+    def ignore_comment(self, t):
+        lines = len(t.value.split('\n'))
+        self.lineno += lines - 1
 
     @_(r'\n+')
     def ignore_newline(self, t):
         self.lineno += len(t.value)
 
     def error(self, t):
-        raise Exception("Syntax error")
+        raise Exception("Syntax error in grammar\n"
+                        f"Line {self.lineno}")

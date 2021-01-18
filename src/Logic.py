@@ -14,20 +14,20 @@ e_register = Register("e")
 f_register = Register("f")
 
 
-def declare_variables(pidentifier, start=None, end=None):
+def declare_variables(pidentifier, start=None, end=None, line=-1):
     global declared_variables
     if start is None:
         if pidentifier in declared_variables:
-            raise Exception("Variable " + pidentifier + " already exist!!!")
+            raise Exception("Variable " + pidentifier + " already exist!!!"
+                                                        f"\nLine {line}")
         declared_variables[pidentifier] = Variable(pidentifier, generate_memory_number(False))
     else:
         if pidentifier in declared_variables:
-            raise Exception("Table " + pidentifier + " already exist!!!")
+            raise Exception("Table " + pidentifier + " already exist!!!"
+                                                     f"\nLine {line}")
         declared_variables[pidentifier] = Table(pidentifier, start, end, generate_memory_number(True, start, end))
 
 
-def declare_for_variable(pidentifier):
-    pass
 
 
 def generate_memory_number(is_table, start=None, end=None):
@@ -57,22 +57,22 @@ def initialize_registers():
 
 # not for table
 # return Variable/Number/Special
-def get_variable(pidentifier):
+def get_variable(pidentifier, line):
     if pidentifier in declared_variables:
         if isinstance(declared_variables[pidentifier], Table):
-            raise Exception("No index parameter for table " + pidentifier)
+            raise Exception("No index parameter for table " + pidentifier + f"\nLine {line}")
         return declared_variables[pidentifier]
     else:
         if isinstance(pidentifier, int):
             return Number(pidentifier, pidentifier, None)
-        raise Exception("Variable " + pidentifier + " not declared before")
+        raise Exception("Variable " + pidentifier + " not declared before" + f"\nLine {line}")
 
 
 # for tables
 # return TableValue
-def get_table(pidentifier, move):
-    check_is_assigned(move)
-    return TableValue(pidentifier, move)
+def get_table(pidentifier, move, line):
+    check_is_assigned(move, line)
+    return TableValue(pidentifier, move, line)
 
 
 # return Register,[string]
@@ -92,7 +92,7 @@ def get_free_register():
             return reg, []
     # save variable, not iterator
     for reg in possible_registers:
-        if reg.type is RegisterType.is_to_save and not isinstance(reg.variable,ForVariable):
+        if reg.type is RegisterType.is_to_save and not isinstance(reg.variable, ForVariable):
             # saving
             return reg, save_register(reg)
     # save iterator
@@ -100,8 +100,6 @@ def get_free_register():
         if reg.type is RegisterType.is_to_save:
             # saving
             return reg, save_register(reg)
-
-    raise Exception("Could not find free register")
 
 
 # return [string]
@@ -253,9 +251,9 @@ def reset_register(register):
 
 
 # return [string]
-def assign_value(identifier, info):
+def assign_value(identifier, info, line):
     if isinstance(identifier, ForVariable):
-        raise Exception(f"For variable {identifier.name} cannot be modified!!!")
+        raise Exception(f"For variable {identifier.name} cannot be modified!!!"+ f"\nLine {line}")
 
     old_reg = info[0]
     old_string = info[1]
@@ -345,8 +343,8 @@ def load_memory_address_of_variable(variable):
 
 
 # return [string]
-def write_value(variable):
-    check_is_assigned(variable)
+def write_value(variable, line):
+    check_is_assigned(variable, line)
     string = []
     # check if is variable not saved
     pom = None
@@ -371,9 +369,9 @@ def write_value(variable):
     return string + b
 
 
-def check_is_assigned(variable):
+def check_is_assigned(variable, line):
     if not variable.assigned:
-        raise Exception(f"Value {variable.name} not assign before use")
+        raise Exception(f"Value {variable.name} not assign before use"+ f"\nLine {line}")
 
 
 def generate_additional_numbers():
@@ -397,8 +395,8 @@ def generate_additional_numbers():
 
 
 # return Register,[string]
-def add_variables(info1, variable2, assigned_to):
-    check_is_assigned(variable2)
+def add_variables(info1, variable2, assigned_to, line):
+    check_is_assigned(variable2, line)
     reg1 = info1[0]
     string = info1[1]
     if are_variables_same(assigned_to, variable2):
@@ -424,8 +422,8 @@ def add_variables(info1, variable2, assigned_to):
     return reg1, string
 
 
-def sub_variables(info1, variable2, assigned_to):
-    check_is_assigned(variable2)
+def sub_variables(info1, variable2, assigned_to, line):
+    check_is_assigned(variable2, line)
 
     reg1 = info1[0]
     string = info1[1]
@@ -451,12 +449,12 @@ def sub_variables(info1, variable2, assigned_to):
 
 
 # TODO make optimizations
-def mul_variables(info1, variable2, assigned_to):
-    check_is_assigned(variable2)
+def mul_variables(info1, variable2, assigned_to, line):
+    check_is_assigned(variable2, line)
 
     r1 = info1[0]
     string = info1[1]
-    check_is_assigned(r1.variable)
+    check_is_assigned(r1.variable, line)
 
     if r1.type == RegisterType.is_to_save:
         if are_variables_same(r1.variable, assigned_to):
@@ -518,8 +516,8 @@ def is_power_of_two(n):
     return (n != 0) and (n & (n - 1) == 0)
 
 
-def div_variables(info1, variable2, assigned_to):
-    check_is_assigned(variable2)
+def div_variables(info1, variable2, assigned_to, line):
+    check_is_assigned(variable2, line)
 
     r1 = info1[0]
     string = info1[1]
@@ -592,8 +590,8 @@ def div_variables(info1, variable2, assigned_to):
 
 
 # might be invalid
-def mod_variables(info1, variable2, assigned_to):
-    check_is_assigned(variable2)
+def mod_variables(info1, variable2, assigned_to, line):
+    check_is_assigned(variable2, line)
 
     r1 = info1[0]
     string = info1[1]
@@ -677,9 +675,9 @@ def mod_variables(info1, variable2, assigned_to):
     return r1, string
 
 
-def read_variable(variable):
+def read_variable(variable, line):
     if isinstance(variable, ForVariable):
-        raise Exception(f"For variable {variable.name} cannot be modified!!!")
+        raise Exception(f"For variable {variable.name} cannot be modified!!!"+ f"\nLine {line}")
     for register in registers.values():
         if are_variables_same(register.variable, variable):
             register.variable = None
@@ -848,7 +846,6 @@ def condition_neq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
         #     string += save_register(reg1)
         commands_true += reset_register(e_register)
 
-
         string += [
             f"ADD {e_register.name} {reg1.name}",
             f"INC {e_register.name}",
@@ -962,7 +959,7 @@ def condition_lgtr(reg1, reg2, var1, var2, commands_true, commands_false, mode=C
         e_register.type = RegisterType.is_unknown
         e_register.variable = None
         x = loader + commands_true + cond_str + commands + z
-        return  x
+        return x
 
 
 def condition_leq(reg1, reg2, var1, var2, commands_true, commands_false, mode=ConditionMode.is_if, cond_str=None):
@@ -1083,11 +1080,11 @@ def remove_copy_of_registers():
 
 # will be using e_register - e_register is restarted but program does not know that
 # return Register,RegisterTo, [string], ForVariable
-def begin_for(pidentifier, pidentifier_start, pidentifier_end):
+def begin_for(pidentifier, pidentifier_start, pidentifier_end, line):
     if pidentifier in declared_variables:
-        raise Exception("Variable " + pidentifier + " already exist!!!")
-    check_is_assigned(pidentifier_start)
-    check_is_assigned(pidentifier_end)
+        raise Exception("Variable " + pidentifier + " already exist!!!"+ f"\nLine {line}")
+    check_is_assigned(pidentifier_start, line)
+    check_is_assigned(pidentifier_end, line)
     new_end = copy.deepcopy(pidentifier_end)
     new_end.name = "^" + pidentifier
     new_end.memory_address = generate_memory_number(False)
@@ -1232,7 +1229,8 @@ def remove_for_variable_from_register(variable):
     for register in registers.values():
         if are_variables_same(variable, register.variable) \
                 or are_variables_same(variable.value_to, register.variable) \
-                or isinstance(register.variable, TableValue) and are_variables_same(register.variable.move, variable):
+                or isinstance(register.variable, TableValue) and are_variables_same(register.variable.move,
+                                                                                    variable):
             register.variable = None
             register.type = RegisterType.is_unknown
     # print("Register restarted")

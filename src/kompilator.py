@@ -1,10 +1,9 @@
 import argparse
 import sys
 
+from Logic import initialize_registers, generate_additional_numbers
 from MyLexer import MyLexer
 from MyParser import MyParser
-from Logic import declared_variables, initialize_registers, registers, get_free_register, save_register, \
-    generate_additional_numbers
 
 
 def parse_arguments():
@@ -29,8 +28,9 @@ if __name__ == '__main__':
         parser = MyParser()
         commands = []
         try:
-          parse_ready = lexer.tokenize(code)
-          commands = parser.parse(parse_ready) + ["HALT"]
+            parse_ready = lexer.tokenize(code)
+
+            commands = parser.parse(parse_ready) + ["HALT"]
         except Exception as e:
             print(e)
             sys.exit(-1)

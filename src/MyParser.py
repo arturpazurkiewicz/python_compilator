@@ -14,6 +14,9 @@ class MyParser(Parser):
         ('left', ADD, SUB),
         ('left', MUL, DIV),
     )
+
+
+
     '''
     program
     '''
@@ -32,19 +35,19 @@ class MyParser(Parser):
 
     @_('declarations COMMA PIDENTIFIER')
     def declarations(self, p):
-        declare_variables(p.PIDENTIFIER)
+        declare_variables(p.PIDENTIFIER,line=p.lineno)
 
     @_('declarations COMMA PIDENTIFIER LBR NUMBER COLON NUMBER RBR')
     def declarations(self, p):
-        declare_variables(p.PIDENTIFIER, p.NUMBER0, p.NUMBER1)
+        declare_variables(p.PIDENTIFIER, p.NUMBER0, p.NUMBER1,p.lineno)
 
     @_('PIDENTIFIER')
     def declarations(self, p):
-        declare_variables(p.PIDENTIFIER)
+        declare_variables(p.PIDENTIFIER, line=p.lineno)
 
     @_('PIDENTIFIER LBR NUMBER COLON NUMBER RBR')
     def declarations(self, p):
-        declare_variables(p.PIDENTIFIER, p.NUMBER0, p.NUMBER1)
+        declare_variables(p.PIDENTIFIER, p.NUMBER0, p.NUMBER1,p.lineno)
 
     '''
     commands
@@ -77,7 +80,7 @@ class MyParser(Parser):
     def command(self, p):
         a = p.identifier
         b = p.expression
-        z = assign_value(a, b)
+        z = assign_value(a, b, p.lineno)
         return z
 
     @_('IF condition THEN copy_of_registers commands ELSE load_registers commands ENDIF load_registers')
@@ -122,7 +125,7 @@ class MyParser(Parser):
 
     @_('')
     def begin_for(self, p):
-        return begin_for(p[-7], p[-5], p[-3])
+        return begin_for(p[-7], p[-5], p[-3],self.lines)
 
     @_(
         'FOR PIDENTIFIER  FROM value DOWNTO value DO copy_of_registers begin_for copy_of_registers commands ENDFOR load_registers')
@@ -131,12 +134,12 @@ class MyParser(Parser):
 
     @_('READ identifier SEMICOLON')
     def command(self, p):
-        z = read_variable(p.identifier)
+        z = read_variable(p.identifier,p.lineno)
         return z
 
     @_('WRITE value SEMICOLON')
     def command(self, p):
-        z = write_value(p.value)
+        z = write_value(p.value, p.lineno)
         return z
 
     '''
@@ -145,43 +148,43 @@ class MyParser(Parser):
 
     @_('value')
     def expression(self, p):
-        check_is_assigned(p.value)
+        check_is_assigned(p.value,self.lines)
         z = load_variable_to_register(p.value)
         return z
 
     @_('blocked_register MOD value')
     def expression(self, p):
         a = p.blocked_register
-        z = mod_variables(a, p.value, p[-5])
+        z = mod_variables(a, p.value, p[-5],p.lineno)
         return z
 
     @_('blocked_register ADD value')
     def expression(self, p):
         y = p[-5]
         a = p.blocked_register
-        z = add_variables(a, p.value, y)
+        z = add_variables(a, p.value, y,p.lineno)
         return z
 
     @_('blocked_register DIV value')
     def expression(self, p):
         a = p.blocked_register
-        z = div_variables(a, p.value, p[-5])
+        z = div_variables(a, p.value, p[-5],p.lineno)
         return z
 
     @_('blocked_register SUB value')
     def expression(self, p):
         a = p.blocked_register
-        return sub_variables(a, p.value, p[-5])
+        return sub_variables(a, p.value, p[-5], p.lineno)
 
     @_('blocked_register MUL value')
     def expression(self, p):
         a = p.blocked_register
-        z = mul_variables(a, p.value, p[-5])
+        z = mul_variables(a, p.value, p[-5], p.lineno)
         return z
 
     @_('value')
     def blocked_register(self, p):
-        check_is_assigned(p.value)
+        check_is_assigned(p.value, self.lines)
         a = load_variable_to_register(p.value)
         a[0].is_blocked = True
         return a
@@ -217,7 +220,7 @@ class MyParser(Parser):
 
     @_('NUMBER')
     def value(self, p):
-        return get_variable(p.NUMBER)
+        return get_variable(p.NUMBER, p.lineno)
 
     @_('identifier')
     def value(self, p):
@@ -229,17 +232,25 @@ class MyParser(Parser):
 
     @_('PIDENTIFIER')
     def identifier(self, p):
-        return get_variable(p.PIDENTIFIER)
+        self.lines = p.lineno
+        return get_variable(p.PIDENTIFIER,p.lineno)
 
     @_('PIDENTIFIER LBR PIDENTIFIER RBR')
     def identifier(self, p):
-        a = get_table(p.PIDENTIFIER0, get_variable(p.PIDENTIFIER1))
+        self.lines = p.lineno
+        a = get_table(p.PIDENTIFIER0, get_variable(p.PIDENTIFIER1,p.lineno), p.lineno)
         return a
 
     @_('PIDENTIFIER LBR NUMBER RBR')
     def identifier(self, p):
-        a = get_table(p.PIDENTIFIER, get_variable(p.NUMBER))
+        self.lines = p.lineno
+        a = get_table(p.PIDENTIFIER, get_variable(p.NUMBER,p.lineno), p.lineno)
         return a
 
-    def error(self, token):
-        raise Exception("Syntax error in grammar")
+    def error(self, p):
+        raise Exception("Syntax error in grammar\n"
+                        f"Line {p.lineno}")
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lines = 0

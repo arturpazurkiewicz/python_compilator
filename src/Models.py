@@ -30,7 +30,7 @@ class Table(Variable):
 
 
 class TableValue(Variable):
-    def __init__(self, name, move):
+    def __init__(self, name, move, line):
         if name not in declared_variables:
             raise Exception("Table " + name + " does not exist!!!")
         self.table = declared_variables[name]
@@ -39,10 +39,10 @@ class TableValue(Variable):
         # if not isinstance(, Table):
         #     raise Exception(f"Invalid use {name}")
         if isinstance(move, (Table,TableValue)):
-            raise Exception("Invalid table move")
+            raise Exception("Invalid table move"+ f"\nLine {line}")
         if isinstance(move, Number):
             if not (self.table.start <= move.value <= self.table.end):
-                raise Exception("A range outside the array value " + name)
+                raise Exception("A range outside the array value " + name+ f"\nLine {line}")
             memory_address = move.value - self.table.start + self.table.memory_address
         super().__init__(name, memory_address)
         self.assigned = True
