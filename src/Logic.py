@@ -420,26 +420,7 @@ def add_variables(variable1, variable2, assigned_to, line):
         r1.variable = None
         return r1, string
 
-    if are_variables_same(variable1, assigned_to):
-        r1, string = load_variable_to_register(variable1)
-        r1.is_blocked = True
-        r2, s2 = load_variable_to_register(variable2)
-        string += s2
-        r1.is_blocked = False
-        string.append(f"ADD {r1.name} {r2.name}")
-        r1.type = RegisterType.is_unknown
-        r1.variable = None
-        return r1, string
-    elif are_variables_same(variable2, assigned_to):
-        r1, string = load_variable_to_register(variable2)
-        r1.is_blocked = True
-        r2, s2 = load_variable_to_register(variable1)
-        string += s2
-        r1.is_blocked = False
-        string.append(f"ADD {r1.name} {r2.name}")
-        r1.type = RegisterType.is_unknown
-        r1.variable = None
-        return r1, string
+
     if variable1.name == 0:
         return load_variable_to_register(variable2)
     if variable2.name == 0:
@@ -465,11 +446,34 @@ def add_variables(variable1, variable2, assigned_to, line):
         ]
         return r1, string
 
+    if are_variables_same(variable1, assigned_to):
+        r1, string = load_variable_to_register(variable1)
+        r1.is_blocked = True
+        r2, s2 = load_variable_to_register(variable2)
+        string += s2
+        r1.is_blocked = False
+        string.append(f"ADD {r1.name} {r2.name}")
+        r1.type = RegisterType.is_unknown
+        r1.variable = None
+        return r1, string
+    elif are_variables_same(variable2, assigned_to):
+        r1, string = load_variable_to_register(variable2)
+        r1.is_blocked = True
+        r2, s2 = load_variable_to_register(variable1)
+        string += s2
+        r1.is_blocked = False
+        string.append(f"ADD {r1.name} {r2.name}")
+        r1.type = RegisterType.is_unknown
+        r1.variable = None
+        return r1, string
+
     r1, string = load_variable_to_register(variable1)
+    r1.is_blocked = True
     r2, s2 = load_variable_to_register(variable2)
     string += s2 + save_register(r1) + [
         f"ADD {r1.name} {r2.name}"
     ]
+    r1.is_blocked = False
     r1.type = RegisterType.is_unknown
     r1.variable = None
     return r1, string
@@ -534,6 +538,7 @@ def sub_variables(variable1, variable2, assigned_to, line):
         string += b
         string.append(f"SUB {r1.name} {r2.name}")
     r1.variable = None
+    r1.type = RegisterType.is_unknown
     r1.is_blocked = False
     return r1, string
 
@@ -928,7 +933,7 @@ def condition_eq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Con
         if len(loader) > 0:
             it = 1
             loader = [f"JUMP {len(loader) + 1}"] + loader
-        if variable_was_in_copy(reg1):
+        if variable_was_in_copy(var1):
             commands = [
                 f"ADD {e_register.name} {reg1.name}",
                 f"INC {e_register.name}",
@@ -991,7 +996,7 @@ def condition_neq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
         if len(loader) > 0:
             it = 1
             loader = [f"JUMP {len(loader) + 1}"] + loader
-        if variable_was_in_copy(reg1):
+        if variable_was_in_copy(var1):
             commands = [
                 f"ADD {e_register.name} {reg1.name}",
                 f"INC {e_register.name}",
@@ -1070,7 +1075,7 @@ def condition_lgtr(reg1, reg2, var1, var2, commands_true, commands_false, mode=C
         if len(loader) > 0:
             it = 1
             loader = [f"JUMP {len(loader) + 1}"] + loader
-        if variable_was_in_copy(reg1):
+        if variable_was_in_copy(var1):
             commands = [
                 f"ADD {e_register.name} {reg1.name}",
                 f"SUB {e_register.name} {reg2.name}",
@@ -1151,7 +1156,7 @@ def condition_leq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
         if len(loader) > 0:
             it = 1
             loader = [f"JUMP {len(loader) + 1}"] + loader
-        if variable_was_in_copy(reg2):
+        if variable_was_in_copy(var2):
             commands = [
                 f"ADD {e_register.name} {reg2.name}",
                 f"SUB {e_register.name} {reg1.name}",
@@ -1368,12 +1373,11 @@ def remove_for_variable_from_register(variable):
     # print("Register restarted")
 
 
-def variable_was_in_copy(register):
+def variable_was_in_copy(variable):
     x = last_register_copy.pop()
     last_register_copy.append(x)
     for c in x:
-        if c.register == register:
-            if are_variables_same(c.variable, register.variable):
+        if are_variables_same(c.variable, variable):
                 return True
 
     return False
