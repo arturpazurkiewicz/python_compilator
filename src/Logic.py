@@ -103,17 +103,35 @@ def get_free_register():
 
 
 # return [string]
-def generate_number(number, register):
+def generate_number(number, register, recurse=False, number_generating=False):
     all_possibilities = [generate_classic(number, register)]
     max = all_possibilities[0][0]
     all_possibilities += generate_from_registers(number, register, max)
+    if not number_generating and register != f_register and number in declared_variables:
+        var = get_variable(number,-1)
+        if var.memory_address is not None:
+            string = load_variable_to_specific_register(var,register)
+            number = calculate_number_cost(string)
+            all_possibilities.append([number,string])
+
     string = min(all_possibilities)[1]
     # print(f"Było {register.variable}, jest {number}, rejestr {register.name}")
-    register.variable = Number(number, number, None)
-    register.type = RegisterType.is_variable
+    if not recurse:
+        register.variable = Number(number, number, None)
+        register.type = RegisterType.is_variable
+        if number < 0:
+            reset_register(register)
 
     return string
 
+def calculate_number_cost(strings):
+    cost = 0
+    for s in strings:
+        if s.find("RESET") > -1 or s.find("INC") > -1 or s.find("DEC") > -1 or s.find("SHL") > -1 or s.find("SHR") > -1:
+            cost +=1
+        elif s.find("ADD") > -1 or s.find("SUB"):
+            cost +=5
+    return cost
 
 def generate_classic(number, register):
     string = []
@@ -129,12 +147,9 @@ def generate_classic(number, register):
             number = number >> 1
         if register.type is not RegisterType.is_restarted:
             string = [f"RESET {register.name}"] + string
-        else:
-            register.type = RegisterType.is_unknown
     else:
         if register.type is not RegisterType.is_restarted:
             string = [f"RESET {register.name}"] + string
-        register.type = RegisterType.is_restarted
     return [len(string), string]
 
 
@@ -172,7 +187,27 @@ def generate_from_registers(number, register, max):
                         if move < 0:
                             string += [f"DEC {register.name}"] * -move
                         result.append([5 + abs(move), string])
-
+    # print("w")
+    for reg in list(registers.values()) + [e_register, f_register]:
+        if isinstance(reg.variable, Number) and reg.type is RegisterType.is_variable and reg != register:
+            move = number - reg.variable.value
+            if move >= 0:
+                was_type = register.type
+                counter, string = generate_classic(move, register)
+                register.type = was_type
+                counter += 5
+                string.append(f"ADD {register.name} {reg.name}")
+                result.append([counter + move,string])
+                continue
+            if abs(move) < max:
+                string = []
+                counter = 0
+                if register.type is not RegisterType.is_restarted:
+                    string.append(f"RESET {register.name}")
+                    counter += 1
+                string.append(f"ADD {register.name} {reg.name}")
+                string += [f"DEC {register.name}"] * -move
+                result.append([counter -move,string])
     return result
 
 
@@ -446,8 +481,8 @@ def generate_additional_numbers():
     except:
         return []
     for i in range(len(additional_numbers)):
-        string += generate_number(additional_numbers[i].memory_address, f_register)
-        string += generate_number(additional_numbers[i].value, e_register)
+        string += generate_number(additional_numbers[i].memory_address, f_register,number_generating=True)
+        string += generate_number(additional_numbers[i].value, e_register,number_generating=True)
         string.append(f"STORE {e_register.name} {f_register.name}")
 
     return string
@@ -876,7 +911,7 @@ def copy_of_registers():
     for register in registers.values():
         reg_copy.append(LostRegister(register, register.variable, register.type))
     global last_register_copy
-    result = (reg_copy,[LostRegister(e_register, e_register.variable, e_register.type),
+    result = (reg_copy, [LostRegister(e_register, e_register.variable, e_register.type),
                          LostRegister(f_register, f_register.variable, f_register.type)])
     last_register_copy.append(result)
     return result
@@ -931,7 +966,7 @@ def load_registers():
         was_type = x.register_type
         was_variable = x.variable
         if was_type == RegisterType.is_variable:
-            string += generate_number(was_variable.value,real_reg)
+            string += generate_number(was_variable.value, real_reg)
         if was_type == RegisterType.is_unknown:
             real_reg.variable = None
             real_reg.type = RegisterType.is_unknown
