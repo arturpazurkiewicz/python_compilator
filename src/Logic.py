@@ -108,7 +108,7 @@ def generate_number(number, register):
     max = all_possibilities[0][0]
     all_possibilities += generate_from_registers(number, register, max)
     string = min(all_possibilities)[1]
-    print(f"Było {register.variable}, jest {number}, rejestr {register.name}")
+    # print(f"Było {register.variable}, jest {number}, rejestr {register.name}")
     register.variable = Number(number, number, None)
     register.type = RegisterType.is_variable
 
@@ -229,13 +229,13 @@ def get_table_address_of_variable(variable):
     string += generate_number(variable.table.memory_address, f_register)
     string.append(f"ADD {f_register.name} {move.name}")
     # fix
-    f_register.type = RegisterType.is_variable
+    f_register.type = RegisterType.is_unknown
+    f_register.variable = None
     if variable.table.start > 0:
         string += generate_number(variable.table.start, e_register)
         string.append(f"SUB {f_register.name} {e_register.name}")
 
     # f_register.variable = TableValueMemory(variable.table, variable.move)
-    f_register.variable = None
     return f_register, string
 
 
@@ -931,7 +931,7 @@ def load_registers():
         was_type = x.register_type
         was_variable = x.variable
         if was_type == RegisterType.is_variable:
-            string += load_variable_to_specific_register(was_variable,real_reg)
+            string += generate_number(was_variable.value,real_reg)
         if was_type == RegisterType.is_unknown:
             real_reg.variable = None
             real_reg.type = RegisterType.is_unknown
