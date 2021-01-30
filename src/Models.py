@@ -38,11 +38,11 @@ class TableValue(Variable):
         memory_address = None
         # if not isinstance(, Table):
         #     raise Exception(f"Invalid use {name}")
-        if isinstance(move, (Table,TableValue)):
-            raise Exception("Invalid table move"+ f"\nLine {line}")
+        if isinstance(move, (Table, TableValue)):
+            raise Exception("Invalid table move" + f"\nLine {line}")
         if isinstance(move, Number):
             if not (self.table.start <= move.value <= self.table.end):
-                raise Exception("A range outside the array value " + name+ f"\nLine {line}")
+                raise Exception("A range outside the array value " + name + f"\nLine {line}")
             memory_address = move.value - self.table.start + self.table.memory_address
         super().__init__(name, memory_address)
         self.assigned = True
