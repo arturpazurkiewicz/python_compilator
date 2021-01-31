@@ -575,11 +575,10 @@ def add_variables(variable1, variable2, assigned_to, line):
             r2, string2 = get_free_register()
             string2 += generate_number(variable1.value + variable2.value, r2)
         if calculate_cost(string2) <= calculate_cost(string):
-            return r2,string2
+            return r2, string2
         else:
             load_copy_of_registers(register_copy2)
             return r1, string
-
 
     return r1, string
     # if are_variables_same(reg1.variable, variable2):
@@ -656,7 +655,6 @@ def sub_variables(variable1, variable2, assigned_to, line):
     return r1, string
 
 
-# TODO make optimizations
 def mul_variables(variable1, variable2, assigned_to, line):
     check_is_assigned(variable1, line)
     check_is_assigned(variable2, line)
@@ -948,6 +946,7 @@ def load_copy_of_registers(copy_of_registers):
         was_variable = x.variable
         real_reg.type = was_type
         real_reg.variable = was_variable
+
 
 # return [string] which need to be added to last commands
 def load_registers():
