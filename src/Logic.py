@@ -108,11 +108,11 @@ def generate_number(number, register, recurse=False, number_generating=False):
     max = all_possibilities[0][0]
     all_possibilities += generate_from_registers(number, register, max)
     if not number_generating and register != f_register and number in declared_variables:
-        var = get_variable(number,-1)
+        var = get_variable(number, -1)
         if var.memory_address is not None:
-            string = load_variable_to_specific_register(var,register)
-            number = calculate_number_cost(string)
-            all_possibilities.append([number,string])
+            string = load_variable_to_specific_register(var, register)
+            number = calculate_cost(string)
+            all_possibilities.append([number, string])
 
     string = min(all_possibilities)[1]
     # print(f"Było {register.variable}, jest {number}, rejestr {register.name}")
@@ -124,14 +124,18 @@ def generate_number(number, register, recurse=False, number_generating=False):
 
     return string
 
-def calculate_number_cost(strings):
+
+def calculate_cost(strings):
     cost = 0
     for s in strings:
         if s.find("RESET") > -1 or s.find("INC") > -1 or s.find("DEC") > -1 or s.find("SHL") > -1 or s.find("SHR") > -1:
-            cost +=1
-        elif s.find("ADD") > -1 or s.find("SUB"):
-            cost +=5
+            cost += 1
+        elif s.find("ADD") > -1 or s.find("SUB") > -1:
+            cost += 5
+        elif s.find("LOAD") > -1 or s.find("STORE") > -1:
+            cost += 20
     return cost
+
 
 def generate_classic(number, register):
     string = []
@@ -197,7 +201,7 @@ def generate_from_registers(number, register, max):
                 register.type = was_type
                 counter += 5
                 string.append(f"ADD {register.name} {reg.name}")
-                result.append([counter + move,string])
+                result.append([counter + move, string])
                 continue
             if abs(move) < max:
                 string = []
@@ -207,7 +211,7 @@ def generate_from_registers(number, register, max):
                     counter += 1
                 string.append(f"ADD {register.name} {reg.name}")
                 string += [f"DEC {register.name}"] * -move
-                result.append([counter -move,string])
+                result.append([counter - move, string])
     return result
 
 
@@ -481,8 +485,8 @@ def generate_additional_numbers():
     except:
         return []
     for i in range(len(additional_numbers)):
-        string += generate_number(additional_numbers[i].memory_address, f_register,number_generating=True)
-        string += generate_number(additional_numbers[i].value, e_register,number_generating=True)
+        string += generate_number(additional_numbers[i].memory_address, f_register, number_generating=True)
+        string += generate_number(additional_numbers[i].value, e_register, number_generating=True)
         string.append(f"STORE {e_register.name} {f_register.name}")
 
     return string
@@ -490,16 +494,9 @@ def generate_additional_numbers():
 
 # return Register,[string]
 def add_variables(variable1, variable2, assigned_to, line):
+    registers_copy = copy_of_registers(add_to_last_register=False)
     check_is_assigned(variable1, line)
     check_is_assigned(variable2, line)
-    if isinstance(variable1, Number) and isinstance(variable2, Number):
-        a, b = is_in_register(assigned_to)
-        if a:
-            return b, generate_number(variable1.value + variable2.value, b)
-        else:
-            r1, string = get_free_register()
-            string += generate_number(variable1.value + variable2.value, r1)
-            return r1, string
 
     if are_variables_same(variable1, variable2):
         r1, string = load_variable_to_register(variable1)
@@ -567,6 +564,23 @@ def add_variables(variable1, variable2, assigned_to, line):
     r1.is_blocked = False
     r1.type = RegisterType.is_unknown
     r1.variable = None
+
+    if isinstance(variable1, Number) and isinstance(variable2, Number):
+        register_copy2 = copy_of_registers(add_to_last_register=False)
+        load_copy_of_registers(registers_copy)
+        a, r2 = is_in_register(assigned_to)
+        if a:
+            string2 = generate_number(variable1.value + variable2.value, r2)
+        else:
+            r2, string2 = get_free_register()
+            string2 += generate_number(variable1.value + variable2.value, r2)
+        if calculate_cost(string2) <= calculate_cost(string):
+            return r2,string2
+        else:
+            load_copy_of_registers(register_copy2)
+            return r1, string
+
+
     return r1, string
     # if are_variables_same(reg1.variable, variable2):
     #     string.append(f"SHL {reg1.name}")
@@ -586,15 +600,7 @@ def add_variables(variable1, variable2, assigned_to, line):
 def sub_variables(variable1, variable2, assigned_to, line):
     check_is_assigned(variable1, line)
     check_is_assigned(variable2, line)
-
-    if isinstance(variable1, Number) and isinstance(variable2, Number):
-        a, b = is_in_register(assigned_to)
-        if a:
-            return b, generate_number(variable1.value - variable2.value, b)
-        else:
-            r1, string = get_free_register()
-            string += generate_number(variable1.value - variable2.value, r1)
-            return r1, string
+    registers_copy = copy_of_registers(add_to_last_register=False)
 
     # if reg1.type == RegisterType.is_to_save:
     #     if are_variables_same(reg1.variable, assigned_to):
@@ -631,6 +637,22 @@ def sub_variables(variable1, variable2, assigned_to, line):
     r1.variable = None
     r1.type = RegisterType.is_unknown
     r1.is_blocked = False
+
+    if isinstance(variable1, Number) and isinstance(variable2, Number):
+        register_copy2 = copy_of_registers(add_to_last_register=False)
+        load_copy_of_registers(registers_copy)
+        a, r2 = is_in_register(assigned_to)
+        if a:
+            string2 = generate_number(variable1.value - variable2.value, r2)
+        else:
+            r2, string2 = get_free_register()
+            string2 += generate_number(variable1.value - variable2.value, r2)
+        if calculate_cost(string2) <= calculate_cost(string):
+            return r2, string2
+        else:
+            load_copy_of_registers(register_copy2)
+            return r1, string
+
     return r1, string
 
 
@@ -906,16 +928,25 @@ def read_variable(variable, line):
     return b
 
 
-def copy_of_registers():
+def copy_of_registers(add_to_last_register=True):
     reg_copy = []
     for register in registers.values():
         reg_copy.append(LostRegister(register, register.variable, register.type))
     global last_register_copy
     result = (reg_copy, [LostRegister(e_register, e_register.variable, e_register.type),
                          LostRegister(f_register, f_register.variable, f_register.type)])
-    last_register_copy.append(result)
+    if add_to_last_register:
+        last_register_copy.append(result)
     return result
 
+
+def load_copy_of_registers(copy_of_registers):
+    for x in copy_of_registers[0] + copy_of_registers[1]:
+        real_reg = x.register
+        was_type = x.register_type
+        was_variable = x.variable
+        real_reg.type = was_type
+        real_reg.variable = was_variable
 
 # return [string] which need to be added to last commands
 def load_registers():

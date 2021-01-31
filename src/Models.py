@@ -1,4 +1,5 @@
 import enum
+from copy import deepcopy
 
 from Logic import declared_variables
 
