@@ -744,7 +744,8 @@ def div_variables(variable1, variable2, assigned_to, line):
             r1.type = RegisterType.is_variable
         else:
             string += save_register(r1)
-
+    if variable2.name == 1:
+        return r1, string
     if variable2.name == 0 or variable2.name == 0:
         string.append(f"RESET {r1.name}")
     elif isinstance(r1, Number) and isinstance(variable2, Number):
@@ -830,7 +831,7 @@ def mod_variables(variable1, variable2, assigned_to, line):
     check_is_assigned(variable1, line)
     check_is_assigned(variable2, line)
 
-    if variable1.name == 0 or variable2.name == 0 or are_variables_same(variable1, variable2):
+    if variable1.name == 0 or variable2.name == 0 or variable2.name == 1 or are_variables_same(variable1, variable2):
         r1, string = get_free_register()
         string += reset_register(r1)
     elif isinstance(variable1, Number) and isinstance(variable2, Number):
