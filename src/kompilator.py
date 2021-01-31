@@ -27,16 +27,13 @@ if __name__ == '__main__':
         lexer = MyLexer()
         parser = MyParser()
         commands = []
-        parse_ready = lexer.tokenize(code)
+        try:
+            parse_ready = lexer.tokenize(code)
 
-        commands = parser.parse(parse_ready) + ["HALT"]
-        # try:
-        #     parse_ready = lexer.tokenize(code)
-        #
-        #     commands = parser.parse(parse_ready) + ["HALT"]
-        # except Exception as e:
-        #     print(e)
-        #     sys.exit(-1)
+            commands = parser.parse(parse_ready) + ["HALT"]
+        except Exception as e:
+            print(e)
+            sys.exit(-1)
 
         commands = generate_additional_numbers() + commands
     with open(args.output_file, 'w') as output_file:
