@@ -28,8 +28,6 @@ def declare_variables(pidentifier, start=None, end=None, line=-1):
         declared_variables[pidentifier] = Table(pidentifier, start, end, generate_memory_number(True, start, end))
 
 
-
-
 def generate_memory_number(is_table, start=None, end=None):
     global free_memory
     if is_table:
@@ -73,7 +71,7 @@ def get_variable(pidentifier, line):
 def get_table(pidentifier, move, line):
     check_is_assigned(move, line)
     if not isinstance(declared_variables[pidentifier], Table):
-        raise Exception(f"{pidentifier} is not a table"+ f"\nLine {line}")
+        raise Exception(f"{pidentifier} is not a table" + f"\nLine {line}")
     return TableValue(pidentifier, move, line)
 
 
@@ -105,7 +103,41 @@ def get_free_register():
 
 
 # return [string]
-def generate_number(number, register):
+def generate_number(number, register, recurse=False, number_generating=False):
+    all_possibilities = [generate_classic(number, register)]
+    max = all_possibilities[0][0]
+    all_possibilities += generate_from_registers(number, register, max)
+    if not number_generating and register != f_register and number in declared_variables:
+        var = get_variable(number, -1)
+        if var.memory_address is not None:
+            string = load_variable_to_specific_register(var, register)
+            number = calculate_cost(string)
+            all_possibilities.append([number, string])
+
+    string = min(all_possibilities)[1]
+    # print(f"Było {register.variable}, jest {number}, rejestr {register.name}")
+    if not recurse:
+        register.variable = Number(number, number, None)
+        register.type = RegisterType.is_variable
+        if number < 0:
+            reset_register(register)
+
+    return string
+
+
+def calculate_cost(strings):
+    cost = 0
+    for s in strings:
+        if s.find("RESET") > -1 or s.find("INC") > -1 or s.find("DEC") > -1 or s.find("SHL") > -1 or s.find("SHR") > -1:
+            cost += 1
+        elif s.find("ADD") > -1 or s.find("SUB") > -1:
+            cost += 5
+        elif s.find("LOAD") > -1 or s.find("STORE") > -1:
+            cost += 20
+    return cost
+
+
+def generate_classic(number, register):
     string = []
     if number > 0:
         while number > 0:
@@ -119,30 +151,87 @@ def generate_number(number, register):
             number = number >> 1
         if register.type is not RegisterType.is_restarted:
             string = [f"RESET {register.name}"] + string
-        else:
-            register.type = RegisterType.is_unknown
     else:
         if register.type is not RegisterType.is_restarted:
             string = [f"RESET {register.name}"] + string
-        register.type = RegisterType.is_restarted
-    return string
+    return [len(string), string]
+
+
+def generate_from_registers(number, register, max):
+    result = []
+    if isinstance(register.variable, Number):
+        for reg in list(registers.values()) + [e_register, f_register]:
+            if isinstance(reg.variable, Number) and reg.type is RegisterType.is_variable:
+                string = []
+                base = reg.variable.value
+                if reg == register:
+                    # same register
+                    move = number - base
+                    if abs(move) < max:
+                        if move > 0:
+                            string += [f"INC {reg.name}"] * move
+                        if move < 0:
+                            string += [f"DEC {reg.name}"] * -move
+                        result.append([abs(move), string])
+                    continue
+                # different registers
+                move = number - (register.variable.value + reg.variable.value)
+                if abs(move) < max:
+                    string = [f"ADD {register.name} {reg.name}"]
+                    if move > 0:
+                        string += [f"INC {register.name}"] * move
+                    if move < 0:
+                        string += [f"DEC {register.name}"] * -move
+                    result.append([5 + abs(move), string])
+                if abs(move) < max:
+                    if register.variable.value - reg.variable.value > 0:
+                        string = [f"SUB {register.name} {reg.name}"]
+                        if move > 0:
+                            string += [f"INC {register.name}"] * move
+                        if move < 0:
+                            string += [f"DEC {register.name}"] * -move
+                        result.append([5 + abs(move), string])
+    # print("w")
+    for reg in list(registers.values()) + [e_register, f_register]:
+        if isinstance(reg.variable, Number) and reg.type is RegisterType.is_variable and reg != register:
+            move = number - reg.variable.value
+            if move >= 0:
+                was_type = register.type
+                counter, string = generate_classic(move, register)
+                register.type = was_type
+                counter += 5
+                string.append(f"ADD {register.name} {reg.name}")
+                result.append([counter + move, string])
+                continue
+            if abs(move) < max:
+                string = []
+                counter = 0
+                if register.type is not RegisterType.is_restarted:
+                    string.append(f"RESET {register.name}")
+                    counter += 1
+                string.append(f"ADD {register.name} {reg.name}")
+                string += [f"DEC {register.name}"] * -move
+                result.append([counter - move, string])
+    return result
 
 
 # return [string]
 def save_register(register):
-    string = []
-    variable = register.variable
-    register.type = RegisterType.is_variable
-    if variable.memory_address is not None:
-        # print(f"Saving {register.variable.name} to {register.variable.memory_address}")
-        string += generate_number(variable.memory_address, f_register)
-        string += [f"STORE {register.name} {f_register.name}"]
-        return string
-    elif isinstance(variable, TableValue):
-        # print(f"Saving {register.variable.name} with move {register.variable.move.name}")
-        reg, string = get_table_address_of_variable(variable)
-        string.append(f"STORE {register.name} {reg.name}")
-        return string
+    if register.type is RegisterType.is_to_save:
+        string = []
+        variable = register.variable
+        register.type = RegisterType.is_variable
+        if variable.memory_address is not None:
+            # print(f"Saving {register.variable.name} to {register.variable.memory_address}")
+            string += generate_number(variable.memory_address, f_register)
+            string += [f"STORE {register.name} {f_register.name}"]
+            return string
+        elif isinstance(variable, TableValue):
+            # print(f"Saving {register.variable.name} with move {register.variable.move.name}")
+            reg, string = get_table_address_of_variable(variable)
+            string.append(f"STORE {register.name} {reg.name}")
+            return string
+    return []
 
 
 # return boolean
@@ -159,6 +248,11 @@ def are_variables_same(var1, var2):
 
 # return Register, [string]
 def get_table_address_of_variable(variable):
+    # for register in list(registers.values()) + [e_register,f_register]:
+    #     if isinstance(register.variable,TableValueMemory) \
+    #             and variable.table == register.variable.table \
+    #             and variable.move.name == register.variable.move.name:
+    #         return register,[]
     if variable.memory_address is not None:
         return f_register, generate_number(variable.memory_address, f_register)
     for register in registers.values():
@@ -175,9 +269,12 @@ def get_table_address_of_variable(variable):
     string.append(f"ADD {f_register.name} {move.name}")
     # fix
     f_register.type = RegisterType.is_unknown
+    f_register.variable = None
     if variable.table.start > 0:
         string += generate_number(variable.table.start, e_register)
         string.append(f"SUB {f_register.name} {e_register.name}")
+
+    # f_register.variable = TableValueMemory(variable.table, variable.move)
     return f_register, string
 
 
@@ -219,14 +316,18 @@ def load_variable_to_specific_register(variable, chosen_reg):
         chosen_reg.variable = variable
         return string
     else:
-        chosen_reg.variable = variable
-        chosen_reg.type = RegisterType.is_variable
+
         if isinstance(variable, TableValue):
+            chosen_reg.variable = variable
+            chosen_reg.type = RegisterType.is_variable
             a1, b1 = get_table_address_of_variable(variable)
             b1.append(f"LOAD {chosen_reg.name} {a1.name}")
             return string + b1
         else:
-            return string + load_normal_variable_to_register(variable, chosen_reg)
+            string += load_normal_variable_to_register(variable, chosen_reg)
+            chosen_reg.variable = variable
+            chosen_reg.type = RegisterType.is_variable
+            return string
 
 
 # return [string]
@@ -255,7 +356,7 @@ def reset_register(register):
 # return [string]
 def assign_value(identifier, info, line):
     if isinstance(identifier, ForVariable):
-        raise Exception(f"For variable {identifier.name} cannot be modified!!!"+ f"\nLine {line}")
+        raise Exception(f"For variable {identifier.name} cannot be modified!!!" + f"\nLine {line}")
 
     old_reg = info[0]
     old_string = info[1]
@@ -373,101 +474,209 @@ def write_value(variable, line):
 
 def check_is_assigned(variable, line):
     if not variable.assigned:
-        raise Exception(f"Value {variable.name} not assign before use"+ f"\nLine {line}")
+        raise Exception(f"Value {variable.name} not assign before use" + f"\nLine {line}")
 
 
 def generate_additional_numbers():
     global additional_numbers
     try:
         initialize_registers()
-        memory = additional_numbers[0].memory_address
         string = []
     except:
         return []
-    string += generate_number(memory, f_register)
     for i in range(len(additional_numbers)):
-        string += generate_number(additional_numbers[i].value, e_register)
+        string += generate_number(additional_numbers[i].memory_address, f_register, number_generating=True)
+        string += generate_number(additional_numbers[i].value, e_register, number_generating=True)
         string.append(f"STORE {e_register.name} {f_register.name}")
-        if i < len(additional_numbers) - 1:
-            next_memory = additional_numbers[i + 1].memory_address
-            while memory < next_memory:
-                string.append(f"INC {f_register.name}")
-                memory += 1
+
     return string
 
 
 # return Register,[string]
-def add_variables(info1, variable2, assigned_to, line):
-    check_is_assigned(variable2, line)
-    reg1 = info1[0]
-    string = info1[1]
-    if are_variables_same(assigned_to, variable2):
-        pass
-
-    if reg1.type == RegisterType.is_to_save:
-        if are_variables_same(reg1.variable, assigned_to):
-            reg1.type = RegisterType.is_variable
-        else:
-            string += save_register(reg1)
-    if are_variables_same(reg1.variable, variable2):
-        string.append(f"SHL {reg1.name}")
-    elif variable2.name == 1:
-        string.append(f"INC {reg1.name}")
-    elif variable2.name == 0:
-        pass
-    else:
-        a, b = load_variable_to_register(variable2)
-        string += b
-        string.append(f"ADD {reg1.name} {a.name}")
-    reg1.variable = None
-    reg1.is_blocked = False
-    return reg1, string
-
-
-def sub_variables(info1, variable2, assigned_to, line):
+def add_variables(variable1, variable2, assigned_to, line):
+    registers_copy = copy_of_registers(add_to_last_register=False)
+    check_is_assigned(variable1, line)
     check_is_assigned(variable2, line)
 
-    reg1 = info1[0]
-    string = info1[1]
-    if reg1.type == RegisterType.is_to_save:
-        if are_variables_same(reg1.variable, assigned_to):
-            reg1.type = RegisterType.is_variable
-        else:
-            string += save_register(reg1)
-
-    if are_variables_same(info1[0].variable, variable2):
-        string.append(f"RESET {reg1.name}")
-    elif variable2.name == 1:
-        string.append(f"DEC {reg1.name}")
-    elif variable2.name == 0:
-        pass
-    else:
-        a, b = load_variable_to_register(variable2)
-        string += b
-        string.append(f"SUB {reg1.name} {a.name}")
-    reg1.variable = None
-    reg1.is_blocked = False
-    return reg1, string
-
-
-# TODO make optimizations
-def mul_variables(info1, variable2, assigned_to, line):
-    check_is_assigned(variable2, line)
-
-    r1 = info1[0]
-    string = info1[1]
-    check_is_assigned(r1.variable, line)
-
-    if r1.type == RegisterType.is_to_save:
-        if are_variables_same(r1.variable, assigned_to):
-            r1.type = RegisterType.is_variable
-        else:
+    if are_variables_same(variable1, variable2):
+        r1, string = load_variable_to_register(variable1)
+        if not are_variables_same(variable1, assigned_to):
             string += save_register(r1)
-    if variable2.name == 0 or variable2.name == 0:
-        string.append(f"RESET {r1.name}")
-    elif isinstance(r1, Number) and isinstance(variable2, Number):
-        string += generate_number(int(r1.value * variable2.value), r1)
+        string += [
+            f"SHL {r1.name}"
+        ]
+        r1.type = RegisterType.is_unknown
+        r1.variable = None
+        return r1, string
+
+    if variable1.name == 0:
+        return load_variable_to_register(variable2)
+    if variable2.name == 0:
+        return load_variable_to_register(variable1)
+    if variable1.name == 1:
+        r1, string = load_variable_to_register(variable2)
+        if not are_variables_same(variable2, assigned_to):
+            string += save_register(r1)
+        r1.type = RegisterType.is_unknown
+        r1.variable = None
+        string += [
+            f"INC {r1.name}"
+        ]
+        return r1, string
+    if variable2.name == 1:
+        r1, string = load_variable_to_register(variable1)
+        if not are_variables_same(variable1, assigned_to):
+            string += save_register(r1)
+        r1.type = RegisterType.is_unknown
+        r1.variable = None
+        string += [
+            f"INC {r1.name}"
+        ]
+        return r1, string
+
+    if are_variables_same(variable1, assigned_to):
+        r1, string = load_variable_to_register(variable1)
+        r1.is_blocked = True
+        r2, s2 = load_variable_to_register(variable2)
+        string += s2
+        r1.is_blocked = False
+        string.append(f"ADD {r1.name} {r2.name}")
+        r1.type = RegisterType.is_unknown
+        r1.variable = None
+        return r1, string
+    elif are_variables_same(variable2, assigned_to):
+        r1, string = load_variable_to_register(variable2)
+        r1.is_blocked = True
+        r2, s2 = load_variable_to_register(variable1)
+        string += s2
+        r1.is_blocked = False
+        string.append(f"ADD {r1.name} {r2.name}")
+        r1.type = RegisterType.is_unknown
+        r1.variable = None
+        return r1, string
+
+    r1, string = load_variable_to_register(variable1)
+    r1.is_blocked = True
+    r2, s2 = load_variable_to_register(variable2)
+    string += s2 + save_register(r1) + [
+        f"ADD {r1.name} {r2.name}"
+    ]
+    r1.is_blocked = False
+    r1.type = RegisterType.is_unknown
+    r1.variable = None
+
+    if isinstance(variable1, Number) and isinstance(variable2, Number):
+        register_copy2 = copy_of_registers(add_to_last_register=False)
+        load_copy_of_registers(registers_copy)
+        a, r2 = is_in_register(assigned_to)
+        if a:
+            string2 = generate_number(variable1.value + variable2.value, r2)
+        else:
+            r2, string2 = get_free_register()
+            string2 += generate_number(variable1.value + variable2.value, r2)
+        if calculate_cost(string2) <= calculate_cost(string):
+            return r2, string2
+        else:
+            load_copy_of_registers(register_copy2)
+            return r1, string
+
+    return r1, string
+    # if are_variables_same(reg1.variable, variable2):
+    #     string.append(f"SHL {reg1.name}")
+    # elif variable2.name == 1:
+    #     string.append(f"INC {reg1.name}")
+    # elif variable2.name == 0:
+    #     pass
+    # else:
+    #     a, b = load_variable_to_register(variable2)
+    #     string += b
+    #     string.append(f"ADD {reg1.name} {a.name}")
+    # reg1.variable = None
+    # reg1.is_blocked = False
+    # return reg1, string
+
+
+def sub_variables(variable1, variable2, assigned_to, line):
+    check_is_assigned(variable1, line)
+    check_is_assigned(variable2, line)
+    registers_copy = copy_of_registers(add_to_last_register=False)
+
+    # if reg1.type == RegisterType.is_to_save:
+    #     if are_variables_same(reg1.variable, assigned_to):
+    #         reg1.type = RegisterType.is_variable
+    #     else:
+    #         string += save_register(reg1)
+
+    if are_variables_same(variable1, variable2):
+        x, r1 = is_in_register(assigned_to)
+        if x:
+            string = [f"RESET {r1.name}"]
+        else:
+            r1, string = get_free_register()
+            string += [f"RESET {r1.name}"]
+        r1.type = RegisterType.is_restarted
+        r1.variable = None
+        return r1, string
+
+    if are_variables_same(variable1, assigned_to):
+        r1, string = load_variable_to_register(variable1)
     else:
+        r1, string = load_variable_to_register(variable1)
+        string += save_register(r1)
+
+    if variable2.name == 1:
+        string.append(f"DEC {r1.name}")
+    elif variable2.name == 0:
+        pass
+    else:
+        r1.is_blocked = True
+        r2, b = load_variable_to_register(variable2)
+        string += b
+        string.append(f"SUB {r1.name} {r2.name}")
+    r1.variable = None
+    r1.type = RegisterType.is_unknown
+    r1.is_blocked = False
+
+    if isinstance(variable1, Number) and isinstance(variable2, Number):
+        register_copy2 = copy_of_registers(add_to_last_register=False)
+        load_copy_of_registers(registers_copy)
+        a, r2 = is_in_register(assigned_to)
+        if a:
+            string2 = generate_number(variable1.value - variable2.value, r2)
+        else:
+            r2, string2 = get_free_register()
+            string2 += generate_number(variable1.value - variable2.value, r2)
+        if calculate_cost(string2) <= calculate_cost(string):
+            return r2, string2
+        else:
+            load_copy_of_registers(register_copy2)
+            return r1, string
+
+    return r1, string
+
+
+def mul_variables(variable1, variable2, assigned_to, line):
+    check_is_assigned(variable1, line)
+    check_is_assigned(variable2, line)
+
+    if isinstance(variable1, Number) and isinstance(variable2, Number):
+        a, b = is_in_register(assigned_to)
+        if a:
+            return b, generate_number(variable1.value * variable2.value, b)
+        else:
+            r1, string = get_free_register()
+            string += generate_number(variable1.value * variable2.value, r1)
+            return r1, string
+    if are_variables_same(variable1, assigned_to):
+        r1, string = load_variable_to_register(variable1)
+    else:
+        r1, string = load_variable_to_register(variable1)
+        string += save_register(r1)
+
+    if variable1.name == 0 or variable2.name == 0:
+        string.append(f"RESET {r1.name}")
+    else:
+        r1.is_blocked = True
         r2, b = load_variable_to_register(variable2)
 
         if r1 == r2:
@@ -475,12 +684,18 @@ def mul_variables(info1, variable2, assigned_to, line):
             r2, b = get_free_register()
             b += load_variable_to_specific_register(variable2, r2)
         r2.is_blocked = True
-        result, b2 = get_free_register()
-        string += b + b2
+        string += b
+        x, y = is_in_register(assigned_to)
+        if x and r2 != y and r1 != y:
+            result = y
+            result.variable = None
+            result.type = RegisterType.is_unknown
+        else:
+            result, b2 = get_free_register()
+            string += b2 + reset_register(result)
         if r2.type == RegisterType.is_to_save and not are_variables_same(r2.variable, assigned_to):
             string += save_register(r2)
         string += [
-            f"RESET {result.name}",
             f"ADD {result.name} {r2.name}",
             f"SUB {result.name} {r1.name}",
             f"JZERO {result.name} 10",
@@ -518,19 +733,22 @@ def is_power_of_two(n):
     return (n != 0) and (n & (n - 1) == 0)
 
 
-def div_variables(info1, variable2, assigned_to, line):
+def div_variables(variable1, variable2, assigned_to, line):
+    check_is_assigned(variable1, line)
     check_is_assigned(variable2, line)
-
-    r1 = info1[0]
-    string = info1[1]
+    r1, string = load_variable_to_register(variable1)
     if r1.type == RegisterType.is_to_save:
         if are_variables_same(r1.variable, assigned_to):
             r1.type = RegisterType.is_variable
         else:
             string += save_register(r1)
+    if variable2.name == 1:
+        return r1, string
     if variable2.name == 0 or variable2.name == 0:
         string.append(f"RESET {r1.name}")
-    elif are_variables_same(info1[0].variable, variable2):
+    elif isinstance(r1, Number) and isinstance(variable2, Number):
+        string += generate_number(int(r1.value / variable2.value), r1)
+    elif are_variables_same(variable1, variable2):
         string += [
             f"JZERO {r1.name} 4",
             f"RESET {r1.name}",
@@ -538,18 +756,24 @@ def div_variables(info1, variable2, assigned_to, line):
             f"JUMP 2",
             f"RESET {r1.name}"
         ]
-    elif isinstance(r1, Number) and isinstance(variable2, Number):
-        string += generate_number(int(r1.value / variable2.value), r1)
     elif isinstance(variable2, Number) and is_power_of_two(variable2.value):
         string += [f"SHR {r1.name}"] * int(math.log2(variable2.value))
 
     else:
+        r1.is_blocked = True
         r2, b = load_variable_to_register(variable2)
+        string += b
         r2.is_blocked = True
-        result, b2 = get_free_register()
-        string += b + b2
+        x, y = is_in_register(assigned_to)
+        if x and r2 != y and r1 != y:
+            result = y
+            result.variable = None
+            result.type = RegisterType.is_unknown
+        else:
+            result, b2 = get_free_register()
+            string += b2
+        string += reset_register(result)
         string += [
-            f"RESET {result.name}",
             f"JZERO {r2.name} 26",
             f"RESET {e_register.name}",
             f"ADD {e_register.name} {r2.name}",
@@ -588,47 +812,59 @@ def div_variables(info1, variable2, assigned_to, line):
         return result, string
     r1.is_blocked = False
     r1.variable = None
+    r1.type = RegisterType.is_unknown
     return r1, string
 
 
-# might be invalid
-def mod_variables(info1, variable2, assigned_to, line):
+# return Bool, register
+def is_in_register(variable):
+    for register in registers.values():
+        if are_variables_same(register.variable, variable):
+            return True, register
+    return False, None
+
+
+# variable1 % variable2
+def mod_variables(variable1, variable2, assigned_to, line):
+    check_is_assigned(variable1, line)
     check_is_assigned(variable2, line)
 
-    r1 = info1[0]
-    string = info1[1]
-    if r1.type == RegisterType.is_to_save:
-        if are_variables_same(r1.variable, assigned_to):
-            r1.type = RegisterType.is_variable
+    if variable1.name == 0 or variable2.name == 0 or variable2.name == 1 or are_variables_same(variable1, variable2):
+        r1, string = get_free_register()
+        string += reset_register(r1)
+    elif isinstance(variable1, Number) and isinstance(variable2, Number):
+        if variable1.value < variable2.value:
+            r1, string = load_variable_to_register(variable1)
         else:
+            r1, string = get_free_register()
+            string += generate_number(variable1.value % variable2.value, r1)
+    elif variable2.name == 2:
+        r1, string = load_variable_to_register(variable1)
+        if not are_variables_same(r1.variable, assigned_to):
             string += save_register(r1)
-    if variable2.name == 0 or variable2.name == 0:
-        string.append(f"RESET {r1.name}")
-    elif are_variables_same(r1.variable, variable2):
-        string.append(f"RESET {r1.name}")
-    #     todo fix this
-    # elif variable2.name == 2:
-    #     if not are_variables_same(r1.variable,assigned_to):
-    #         string += save_register(r1)
-    #         r1.variable = None
-    #         r1.type = RegisterType.is_unknown
-    #     string += [
-    #         f"JODD {r1.name} 3",
-    #         f"RESET {r1.name}",
-    #         f"JUMP 3",
-    #         f"RESET {r1.name}",
-    #         f"INC {r1.name}"
-    #     ]
-    elif isinstance(r1.variable, Number) and isinstance(variable2, Number):
-        if r1.variable.value < variable2.value:
-            pass
-        else:
-            string += generate_number(r1.variable.value % variable2.value, r1)
+        string += [
+            f"JODD {r1.name} 3",
+            f"RESET {r1.name}",
+            f"JUMP 3",
+            f"RESET {r1.name}",
+            f"INC {r1.name}"
+        ]
     else:
+        r1, string = load_variable_to_register(variable1)
+        r1.is_blocked = True
         r2, b = load_variable_to_register(variable2)
         r2.is_blocked = True
-        result, b2 = get_free_register()
-        string += b + b2
+        x, y = is_in_register(assigned_to)
+        if x and r2 != y and r1 != y:
+            result = y
+            string += b
+            result.variable = None
+            result.type = RegisterType.is_unknown
+        else:
+            result, b2 = get_free_register()
+            string += b + b2
+        if not are_variables_same(r1, assigned_to):
+            string += save_register(r1)
         string += [
             f"JZERO  {r2.name} 27",
             f"RESET {e_register.name}",
@@ -674,12 +910,13 @@ def mod_variables(info1, variable2, assigned_to, line):
         return result, string
     r1.is_blocked = False
     r1.variable = None
+    r1.type = RegisterType.is_unknown
     return r1, string
 
 
 def read_variable(variable, line):
     if isinstance(variable, ForVariable):
-        raise Exception(f"For variable {variable.name} cannot be modified!!!"+ f"\nLine {line}")
+        raise Exception(f"For variable {variable.name} cannot be modified!!!" + f"\nLine {line}")
     for register in registers.values():
         if are_variables_same(register.variable, variable):
             register.variable = None
@@ -690,15 +927,25 @@ def read_variable(variable, line):
     return b
 
 
-def copy_of_registers():
+def copy_of_registers(add_to_last_register=True):
     reg_copy = []
     for register in registers.values():
         reg_copy.append(LostRegister(register, register.variable, register.type))
     global last_register_copy
-    result = reg_copy + [LostRegister(e_register, e_register.variable, e_register.type),
-                         LostRegister(f_register, f_register.variable, f_register.type)]
-    last_register_copy.append(result)
+    result = (reg_copy, [LostRegister(e_register, e_register.variable, e_register.type),
+                         LostRegister(f_register, f_register.variable, f_register.type)])
+    if add_to_last_register:
+        last_register_copy.append(result)
     return result
+
+
+def load_copy_of_registers(copy_of_registers):
+    for x in copy_of_registers[0] + copy_of_registers[1]:
+        real_reg = x.register
+        was_type = x.register_type
+        was_variable = x.variable
+        real_reg.type = was_type
+        real_reg.variable = was_variable
 
 
 # return [string] which need to be added to last commands
@@ -707,7 +954,7 @@ def load_registers():
     last_register_copy.append(last_copy)
     string = []
     # print("Loading register")
-    for x in last_copy:
+    for x in last_copy[0]:
         real_reg = x.register
         was_type = x.register_type
         was_variable = x.variable
@@ -731,7 +978,7 @@ def load_registers():
                 string += z
                 real_reg.type = RegisterType.is_to_save
 
-    for x in last_copy:
+    for x in last_copy[0]:
         real_reg = x.register
         was_type = x.register_type
         if was_type == RegisterType.is_unknown:
@@ -745,6 +992,17 @@ def load_registers():
                 string.append(f"RESET {real_reg.name}")
             else:
                 string += reset_register(real_reg)
+    for x in last_copy[1]:
+        real_reg = x.register
+        was_type = x.register_type
+        was_variable = x.variable
+        if was_type == RegisterType.is_variable:
+            string += generate_number(was_variable.value, real_reg)
+        if was_type == RegisterType.is_unknown:
+            real_reg.variable = None
+            real_reg.type = RegisterType.is_unknown
+        elif was_type == RegisterType.is_restarted:
+            string += reset_register(real_reg)
     return string
 
 
@@ -808,7 +1066,7 @@ def condition_eq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Con
         if len(loader) > 0:
             it = 1
             loader = [f"JUMP {len(loader) + 1}"] + loader
-        if variable_was_in_copy(reg1):
+        if variable_was_in_copy(var1):
             commands = [
                 f"ADD {e_register.name} {reg1.name}",
                 f"INC {e_register.name}",
@@ -871,7 +1129,7 @@ def condition_neq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
         if len(loader) > 0:
             it = 1
             loader = [f"JUMP {len(loader) + 1}"] + loader
-        if variable_was_in_copy(reg1):
+        if variable_was_in_copy(var1):
             commands = [
                 f"ADD {e_register.name} {reg1.name}",
                 f"INC {e_register.name}",
@@ -950,7 +1208,7 @@ def condition_lgtr(reg1, reg2, var1, var2, commands_true, commands_false, mode=C
         if len(loader) > 0:
             it = 1
             loader = [f"JUMP {len(loader) + 1}"] + loader
-        if variable_was_in_copy(reg1):
+        if variable_was_in_copy(var1):
             commands = [
                 f"ADD {e_register.name} {reg1.name}",
                 f"SUB {e_register.name} {reg2.name}",
@@ -1031,7 +1289,7 @@ def condition_leq(reg1, reg2, var1, var2, commands_true, commands_false, mode=Co
         if len(loader) > 0:
             it = 1
             loader = [f"JUMP {len(loader) + 1}"] + loader
-        if variable_was_in_copy(reg2):
+        if variable_was_in_copy(var2):
             commands = [
                 f"ADD {e_register.name} {reg2.name}",
                 f"SUB {e_register.name} {reg1.name}",
@@ -1094,7 +1352,7 @@ def remove_copy_of_registers():
 # return Register,RegisterTo, [string], ForVariable
 def begin_for(pidentifier, pidentifier_start, pidentifier_end, line):
     if pidentifier in declared_variables:
-        raise Exception("Variable " + pidentifier + " already exist!!!"+ f"\nLine {line}")
+        raise Exception("Variable " + pidentifier + " already exist!!!" + f"\nLine {line}")
     check_is_assigned(pidentifier_start, line)
     check_is_assigned(pidentifier_end, line)
     new_end = copy.deepcopy(pidentifier_end)
@@ -1248,12 +1506,11 @@ def remove_for_variable_from_register(variable):
     # print("Register restarted")
 
 
-def variable_was_in_copy(register):
+def variable_was_in_copy(variable):
     x = last_register_copy.pop()
     last_register_copy.append(x)
-    for c in x:
-        if c.register == register:
-            if are_variables_same(c.variable, register.variable):
-                return True
+    for c in x[0] + x[1]:
+        if are_variables_same(c.variable, variable):
+            return True
 
     return False

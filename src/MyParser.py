@@ -152,42 +152,30 @@ class MyParser(Parser):
         z = load_variable_to_register(p.value)
         return z
 
-    @_('blocked_register MOD value')
+    @_('value MOD value')
     def expression(self, p):
-        a = p.blocked_register
-        z = mod_variables(a, p.value, p[-5],p.lineno)
+        z = mod_variables(p.value0, p.value1, p[-5],p.lineno)
         return z
 
-    @_('blocked_register ADD value')
+    @_('value ADD value')
     def expression(self, p):
-        y = p[-5]
-        a = p.blocked_register
-        z = add_variables(a, p.value, y,p.lineno)
+        z = add_variables(p.value0, p.value1, p[-5],p.lineno)
         return z
 
-    @_('blocked_register DIV value')
+    @_('value DIV value')
     def expression(self, p):
-        a = p.blocked_register
-        z = div_variables(a, p.value, p[-5],p.lineno)
+        z = div_variables(p.value0, p.value1, p[-5],p.lineno)
         return z
 
-    @_('blocked_register SUB value')
+    @_('value SUB value')
     def expression(self, p):
-        a = p.blocked_register
-        return sub_variables(a, p.value, p[-5], p.lineno)
+        return sub_variables(p.value0, p.value1, p[-5], p.lineno)
 
-    @_('blocked_register MUL value')
+    @_('value MUL value')
     def expression(self, p):
-        a = p.blocked_register
-        z = mul_variables(a, p.value, p[-5], p.lineno)
+        z = mul_variables(p.value0, p.value1, p[-5], p.lineno)
         return z
 
-    @_('value')
-    def blocked_register(self, p):
-        check_is_assigned(p.value, self.lines)
-        a = load_variable_to_register(p.value)
-        a[0].is_blocked = True
-        return a
 
     @_('value RGTR value', )
     def condition(self, p):
