@@ -632,6 +632,9 @@ def sub_variables(variable1, variable2, assigned_to, line):
         r1.is_blocked = True
         r2, b = load_variable_to_register(variable2)
         string += b
+        string += save_register(r1)
+        if not are_variables_same(r1.variable, assigned_to):
+            string += save_register(r1)
         string.append(f"SUB {r1.name} {r2.name}")
     r1.variable = None
     r1.type = RegisterType.is_unknown
@@ -695,6 +698,8 @@ def mul_variables(variable1, variable2, assigned_to, line):
             string += b2 + reset_register(result)
         if r2.type == RegisterType.is_to_save and not are_variables_same(r2.variable, assigned_to):
             string += save_register(r2)
+        if not are_variables_same(r1.variable, assigned_to):
+            string += save_register(r1)
         string += [
             f"ADD {result.name} {r2.name}",
             f"SUB {result.name} {r1.name}",
@@ -761,6 +766,8 @@ def div_variables(variable1, variable2, assigned_to, line):
 
     else:
         r1.is_blocked = True
+        if not are_variables_same(r1.variable, assigned_to):
+            string += save_register(r1)
         r2, b = load_variable_to_register(variable2)
         string += b
         r2.is_blocked = True
@@ -851,6 +858,8 @@ def mod_variables(variable1, variable2, assigned_to, line):
         ]
     else:
         r1, string = load_variable_to_register(variable1)
+        if not are_variables_same(r1.variable, assigned_to):
+            string += save_register(r1)
         r1.is_blocked = True
         r2, b = load_variable_to_register(variable2)
         r2.is_blocked = True
@@ -981,7 +990,9 @@ def load_registers():
     for x in last_copy[0]:
         real_reg = x.register
         was_type = x.register_type
-        if was_type == RegisterType.is_unknown:
+        if was_type == RegisterType.is_variable:
+            save_register(real_reg)
+        elif was_type == RegisterType.is_unknown:
             if real_reg.type == RegisterType.is_to_save:
                 string += save_register(real_reg)
             real_reg.variable = None
